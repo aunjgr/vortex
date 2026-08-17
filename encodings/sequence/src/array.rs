@@ -30,6 +30,7 @@ use vortex_array::expr::stats::Stat;
 use vortex_array::match_each_integer_ptype;
 use vortex_array::match_each_native_ptype;
 use vortex_array::match_each_pvalue;
+use vortex_array::proto::scalar::ScalarValue as ProtoScalarValue;
 use vortex_array::scalar::PValue;
 use vortex_array::scalar::Scalar;
 use vortex_array::scalar::ScalarValue;
@@ -57,9 +58,9 @@ pub type SequenceArray = Array<Sequence>;
 #[derive(Clone, prost::Message)]
 pub struct SequenceMetadata {
     #[prost(message, tag = "1")]
-    base: Option<vortex_proto::scalar::ScalarValue>,
+    base: Option<ProtoScalarValue>,
     #[prost(message, tag = "2")]
-    multiplier: Option<vortex_proto::scalar::ScalarValue>,
+    multiplier: Option<ProtoScalarValue>,
 }
 
 pub(super) const SLOT_NAMES: [&str; 0] = [];

@@ -1,5 +1,5 @@
 name: "Setup flatc"
-description: "Download and install flatc binary"
+description: "Download and install the flatc binary directly from GitHub releases CDN (no API calls)"
 inputs:
   flatc_version:
     description: "Version of the flatc binary"
@@ -8,9 +8,46 @@ runs:
   using: "composite"
   steps:
     - name: Download flatc
-      id: download-flatc
       shell: bash
       run: |
-        wget -O /tmp/flatc.zip "https://github.com/google/flatbuffers/releases/download/v${{ inputs.flatc_version }}/Linux.flatc.binary.clang++-18.zip"
-        unzip /tmp/flatc.zip flatc
-        mv flatc /usr/local/bin/
+        if [ "$(flatc --version 2>/dev/null)" = "flatc version ${{ inputs.flatc_version }}" ]; then
+          echo "flatc ${{ inputs.flatc_version }} is already installed"
+          exit 0
+        fi
+
+        ARCH=$(uname -m)
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+
+        case "$OS" in
+          linux)  FLATC_ASSET="Linux.flatc.binary.clang++-18.zip" ;;
+          darwin)
+            case "$ARCH" in
+              arm64)  FLATC_ASSET="Mac.flatc.binary.zip" ;;
+              x86_64) FLATC_ASSET="MacIntel.flatc.binary.zip" ;;
+            esac
+            ;;
+          *)      FLATC_ASSET="Windows.flatc.binary.zip" ;;
+        esac
+
+        FLATC_URL="https://github.com/google/flatbuffers/releases/download/v${{ inputs.flatc_version }}/${FLATC_ASSET}"
+        curl -fsSL -o /tmp/flatc.zip "$FLATC_URL"
+        unzip -o /tmp/flatc.zip -d /tmp/flatc
+
+        # This sometimes runs in a container where user is root and there's no sudo.
+        if command -v sudo &>/dev/null
+        then
+          CMD=sudo
+        else
+          CMD=
+        fi
+
+        if [ "$OS" = "linux" ] || [ "$OS" = "darwin" ]; then
+          $CMD mv /tmp/flatc/flatc /usr/local/bin/
+        else
+          # Windows runners have no /usr/local/bin on PATH for non-bash steps.
+          mkdir -p "$HOME/.local/bin"
+          mv /tmp/flatc/flatc.exe "$HOME/.local/bin/"
+          cygpath -w "$HOME/.local/bin" >> "$GITHUB_PATH"
+        fi
+
+        rm -rf /tmp/flatc.zip /tmp/flatc
