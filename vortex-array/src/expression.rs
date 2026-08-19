@@ -38,7 +38,7 @@ impl ApplyCtx {
 impl ArrayRef {
     /// Apply a bound expression to this array.
     pub fn apply_bound(self, expr: &BoundExpression) -> VortexResult<ArrayRef> {
-        apply(self, expr, &mut ApplyCtx::new())
+        apply(self, expr, &mut ApplyCtx::new())?.optimize()
     }
 
     /// Apply the expression to this array, producing a new array in constant time.
@@ -53,7 +53,7 @@ impl ArrayRef {
 pub(crate) fn apply(
     root: ArrayRef,
     expr: &BoundExpression,
-    ctx: &mut ApplyCtx,
+    apply_ctx: &mut ApplyCtx,
 ) -> VortexResult<ArrayRef> {
     let (scalar_fn, children) = match expr {
         BoundExpression::Root { dtype } => {
@@ -65,7 +65,7 @@ pub(crate) fn apply(
             return Ok(root);
         }
         BoundExpression::Variable(variable) => {
-            let array = ctx
+            let array = apply_ctx
                 .binding(variable.variable_ref())
                 .cloned()
                 .ok_or_else(|| vortex_err!("cannot apply unbound variable '{variable}'"))?;
@@ -101,11 +101,10 @@ pub(crate) fn apply(
 
     let children = children
         .iter()
-        .map(|child| apply(root.clone(), child, ctx))
+        .map(|child| apply(root.clone(), child, apply_ctx))
         .try_collect()?;
-    let array =
-        ScalarFnArray::try_new_with_len(scalar_fn.clone(), children, root.len())?.into_array();
-    array.optimize()
+
+    Ok(ScalarFnArray::try_new_with_len(scalar_fn.clone(), children, root.len())?.into_array())
 }
 
 #[cfg(test)]
@@ -117,11 +116,12 @@ mod tests {
     use crate::dtype::DType;
     use crate::dtype::Nullability;
     use crate::dtype::PType;
+    use crate::expr::root;
 
     #[test]
     fn bound_application_checks_root_dtype() -> VortexResult<()> {
         let expected = DType::Primitive(PType::I32, Nullability::NonNullable);
-        let bound = crate::expr::root().bind(&expected)?;
+        let bound = root().bind(&expected)?;
         let root = buffer![0_i64, 0].into_array();
 
         assert!(root.apply_bound(&bound).is_err());
