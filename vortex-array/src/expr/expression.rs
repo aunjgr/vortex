@@ -159,7 +159,30 @@ impl Expression {
 
     /// Computes the return dtype of this expression against a lexical scope.
     pub fn return_dtype(&self, scope: impl Into<Scope>) -> VortexResult<DType> {
-        Ok(self.bind(scope)?.dtype().clone())
+        self.return_dtype_inner(&scope.into())
+    }
+
+    fn return_dtype_inner(&self, scope: &Scope) -> VortexResult<DType> {
+        match self {
+            Self::Root => Ok(scope.root().clone()),
+            Self::Variable(variable) => {
+                let Some((dtype, _)) = scope.resolve(variable) else {
+                    vortex_bail!("unbound variable '{variable}'");
+                };
+                Ok(dtype.clone())
+            }
+            Self::Scalar {
+                scalar_fn,
+                children,
+            } => {
+                let arg_dtypes = children
+                    .iter()
+                    .map(|child| child.return_dtype_inner(scope))
+                    .collect::<VortexResult<Vec<_>>>()?;
+                scalar_fn.return_dtype(&arg_dtypes)
+            }
+            Self::Lambda(_) => vortex_bail!("a lambda has no standalone dtype"),
+        }
     }
 
     /// Returns a new expression representing the validity mask output of this expression.

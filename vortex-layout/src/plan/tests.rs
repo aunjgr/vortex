@@ -336,12 +336,16 @@ fn eval_try_new_rejects_lambda() -> VortexResult<()> {
     let error = EvalPlan::try_new(expression, child)
         .err()
         .ok_or_else(|| vortex_err!("lambda expression unexpectedly produced an Eval plan"))?;
-    assert!(error.to_string().contains("Eval cannot evaluate a lambda"),);
+    assert!(
+        error
+            .to_string()
+            .contains("Eval cannot evaluate a standalone lambda"),
+    );
     Ok(())
 }
 
 #[test]
-fn eval_try_new_rejects_unbound_variables() -> VortexResult<()> {
+fn eval_try_new_rejects_variables() -> VortexResult<()> {
     let dtype = primitive(PType::I32, Nullability::NonNullable);
     let scope =
         Scope::new(dtype.clone()).with_bindings([(Variable::new("value"), dtype.clone())])?;
@@ -354,7 +358,7 @@ fn eval_try_new_rejects_unbound_variables() -> VortexResult<()> {
     assert!(
         error
             .to_string()
-            .contains("Eval cannot evaluate unbound variable 'value'"),
+            .contains("Eval cannot evaluate an expression containing variables"),
     );
     Ok(())
 }

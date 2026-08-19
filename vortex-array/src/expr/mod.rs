@@ -313,11 +313,11 @@ mod tests {
         let value = bound::get_item("value", root);
         let literal = bound::lit(5i32);
         let condition = bound::gt(value.clone(), literal.clone());
-        assert_eq!(condition.dtype(), &DType::Bool(Nullability::NonNullable));
+        assert_eq!(condition.dtype()?, &DType::Bool(Nullability::NonNullable));
         assert_eq!(condition.children(), &[value.clone(), literal.clone()]);
 
         let case = bound::case_when(condition.clone(), value.clone(), literal.clone());
-        assert_eq!(case.dtype(), &value_dtype);
+        assert_eq!(case.dtype()?, &value_dtype);
         assert_eq!(case.children(), &[condition.clone(), value, literal]);
 
         let packed = bound::pack(
@@ -326,7 +326,7 @@ mod tests {
         );
         assert_eq!(packed.children(), &[condition, case.clone()]);
         assert_eq!(
-            packed.dtype(),
+            packed.dtype()?,
             &DType::Struct(
                 StructFields::from_iter([
                     ("condition", DType::Bool(Nullability::NonNullable)),

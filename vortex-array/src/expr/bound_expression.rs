@@ -120,7 +120,7 @@ impl BoundLambda {
     }
 
     /// The dtype the body evaluates to.
-    pub fn body_dtype(&self) -> &DType {
+    pub fn body_dtype(&self) -> VortexResult<&DType> {
         self.body.dtype()
     }
 }
@@ -224,10 +224,10 @@ impl BoundExpression {
             "a scalar function cannot take a lambda as an ordinary argument"
         );
 
-        let arg_dtypes = children
+        let arg_dtypes: Vec<DType> = children
             .iter()
-            .map(|child| child.dtype().clone())
-            .collect_vec();
+            .map(|child| child.dtype().cloned())
+            .try_collect()?;
         let dtype = scalar_fn.return_dtype(&arg_dtypes)?;
 
         Ok(Self::Scalar {
@@ -260,12 +260,12 @@ impl BoundExpression {
 
     /// The dtype this expression evaluates to.
     ///
-    /// Note that the dtype of `BoundExpression::Lambda` is the return type of the body.
-    pub fn dtype(&self) -> &DType {
+    /// A lambda is callable but not array-valued, so it has no standalone dtype.
+    pub fn dtype(&self) -> VortexResult<&DType> {
         match self {
-            Self::Scalar { dtype, .. } | Self::Root { dtype } => dtype,
-            Self::Lambda(lambda) => lambda.body_dtype(),
-            Self::Variable(variable) => variable.dtype(),
+            Self::Scalar { dtype, .. } | Self::Root { dtype } => Ok(dtype),
+            Self::Lambda(_) => vortex_bail!("a lambda has no standalone dtype"),
+            Self::Variable(variable) => Ok(variable.dtype()),
         }
     }
 
@@ -347,17 +347,16 @@ impl BoundExpression {
     /// Return whether every scope root in this expression has `dtype`.
     ///
     /// Expressions without a scope root, such as literals, match every dtype.
-    pub fn is_root_bound_to(&self, dtype: &DType) -> bool {
+    pub fn is_root_bound_to(&self, dtype: &DType) -> VortexResult<bool> {
         let mut is_bound_to = true;
         pre_order_visit_down(self, |node| {
-            if node.is_root() && node.dtype() != dtype {
+            if node.is_root() && node.dtype()? != dtype {
                 is_bound_to = false;
                 return Ok(TraversalOrder::Stop);
             }
             Ok(TraversalOrder::Continue)
-        })
-        .vortex_expect("bound expression traversal cannot not fail");
-        is_bound_to
+        })?;
+        Ok(is_bound_to)
     }
 
     /// Return an expression that proves this predicate is definitely false from statistics.
@@ -516,7 +515,7 @@ mod tests {
     fn root_binds_to_the_scope() -> VortexResult<()> {
         let bound = root().bind(scope())?;
         assert!(bound.is_root());
-        assert_eq!(bound.dtype(), &struct_dtype());
+        assert_eq!(bound.dtype()?, &struct_dtype());
         assert_eq!(bound, BoundExpression::new_root(struct_dtype()));
         Ok(())
     }
@@ -526,14 +525,14 @@ mod tests {
         let expr = eq(col("a"), lit(1_i32));
         let bound = expr.bind(scope())?;
 
-        assert_eq!(bound.dtype(), &DType::Bool(Nullability::NonNullable));
+        assert_eq!(bound.dtype()?, &DType::Bool(Nullability::NonNullable));
 
         let lhs = &bound.children()[0];
         assert_eq!(
-            lhs.dtype(),
+            lhs.dtype()?,
             &DType::Primitive(PType::I32, Nullability::NonNullable)
         );
-        assert_eq!(lhs.children()[0].dtype(), &struct_dtype());
+        assert_eq!(lhs.children()[0].dtype()?, &struct_dtype());
         Ok(())
     }
 
@@ -541,7 +540,7 @@ mod tests {
     fn bind_agrees_with_return_dtype() -> VortexResult<()> {
         for expr in [root(), col("a"), eq(col("a"), lit(1_i32)), lit(true)] {
             assert_eq!(
-                expr.bind(struct_dtype())?.dtype(),
+                expr.bind(struct_dtype())?.dtype()?,
                 &expr.return_dtype(struct_dtype())?,
                 "disagreement for {expr}"
             );
@@ -561,12 +560,12 @@ mod tests {
     fn bound_to_checks_every_root() -> VortexResult<()> {
         let dtype = struct_dtype();
         let bound = eq(col("a"), col("a")).bind(&dtype)?;
-        assert!(bound.is_root_bound_to(&dtype));
-        assert!(!bound.is_root_bound_to(&DType::Bool(Nullability::NonNullable)));
+        assert!(bound.is_root_bound_to(&dtype)?);
+        assert!(!bound.is_root_bound_to(&DType::Bool(Nullability::NonNullable))?);
         assert!(
             lit(true)
                 .bind(&dtype)?
-                .is_root_bound_to(&DType::Bool(Nullability::NonNullable))
+                .is_root_bound_to(&DType::Bool(Nullability::NonNullable))?
         );
         Ok(())
     }
@@ -598,7 +597,7 @@ mod tests {
 
         assert_eq!(variable.variable(), &Variable::new("value"));
         assert_eq!(
-            bound.dtype(),
+            bound.dtype()?,
             &DType::Primitive(PType::I64, Nullability::Nullable)
         );
         Ok(())
@@ -615,7 +614,7 @@ mod tests {
         let validity = expression.validity()?;
         assert!(validity.contains::<IsNotNull>()?);
         assert_eq!(
-            validity.bind(&scope)?.dtype(),
+            validity.bind(&scope)?.dtype()?,
             &DType::Bool(Nullability::NonNullable)
         );
         Ok(())
@@ -633,11 +632,14 @@ mod tests {
         let lambda_scope =
             scope().with_bindings([(Variable::new("value"), value_dtype.clone())])?;
 
+        assert!(lambda.return_dtype(scope()).is_err());
+
         let bound = lambda.bind(&lambda_scope)?;
+        assert!(bound.dtype().is_err());
         let bound = bound
             .as_lambda()
             .vortex_expect("a bound lambda expression must contain a bound lambda");
-        assert_eq!(bound.body_dtype(), &value_dtype);
+        assert_eq!(bound.body_dtype()?, &value_dtype);
         let parameter = &bound.params()[0];
         assert_eq!(parameter.dtype(), &value_dtype);
         assert_eq!(parameter.variable(), &Variable::new("value"));

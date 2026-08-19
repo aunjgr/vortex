@@ -92,7 +92,7 @@ impl Variable {
             expr.children.len()
         );
         let opts = pb::VariableOpts::decode(expr.metadata())?;
-        return Ok(Variable::new(opts.name).into());
+        Ok(Variable::new(opts.name))
     }
 }
 
