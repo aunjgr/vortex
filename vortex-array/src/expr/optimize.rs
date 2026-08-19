@@ -10,6 +10,7 @@ use vortex_utils::aliases::hash_map::HashMap;
 
 use crate::dtype::DType;
 use crate::expr::Expression;
+use crate::expr::Scope;
 use crate::expr::transform::match_between::find_between;
 use crate::scalar_fn::ExpressionReduceNode;
 use crate::scalar_fn::SimplifyCtx;
@@ -22,6 +23,11 @@ impl Expression {
     /// 2. `simplify` - type-aware simplifications
     /// 3. `reduce` - abstract reduction rules via `ReduceNode`
     pub fn optimize(&self, scope: &DType) -> VortexResult<Expression> {
+        self.optimize_scope(&Scope::new(scope.clone()))
+    }
+
+    /// Optimize the root expression node against a lexical scope.
+    pub fn optimize_scope(&self, scope: &Scope) -> VortexResult<Expression> {
         let cache = SimplifyCache::new(scope);
         Ok(self.try_optimize(&cache)?.unwrap_or_else(|| self.clone()))
     }
@@ -111,14 +117,28 @@ impl Expression {
     ///
     /// Optimizes children first (bottom-up), then optimizes the root.
     pub fn optimize_recursive(&self, scope: &DType) -> VortexResult<Expression> {
+        self.optimize_recursive_scope(&Scope::new(scope.clone()))
+    }
+
+    /// Optimize the entire expression tree recursively against a lexical scope.
+    ///
+    /// Variables are resolved from `scope` during type-aware simplification. Higher-order
+    /// functions establish a child scope for each lambda body, so the body is optimized under its
+    /// own root dtype and parameter frame while keeping enclosing captures available.
+    pub fn optimize_recursive_scope(&self, scope: &Scope) -> VortexResult<Expression> {
         Ok(self
             .clone()
-            .try_optimize_recursive(scope)?
+            .try_optimize_recursive_scope(scope)?
             .unwrap_or_else(|| self.clone()))
     }
 
     /// Try to optimize the entire expression tree recursively.
     pub fn try_optimize_recursive(&self, scope: &DType) -> VortexResult<Option<Expression>> {
+        self.try_optimize_recursive_scope(&Scope::new(scope.clone()))
+    }
+
+    /// Try to optimize the entire expression tree recursively against a lexical scope.
+    pub fn try_optimize_recursive_scope(&self, scope: &Scope) -> VortexResult<Option<Expression>> {
         let cache = SimplifyCache::new(scope);
         let result = self.try_optimize_recursive_inner(&cache)?;
 
@@ -162,12 +182,12 @@ impl Expression {
 }
 
 struct SimplifyCache<'a> {
-    scope: &'a DType,
+    scope: &'a Scope,
     dtype_cache: RefCell<HashMap<Expression, DType>>,
 }
 
 impl<'a> SimplifyCache<'a> {
-    fn new(scope: &'a DType) -> Self {
+    fn new(scope: &'a Scope) -> Self {
         Self {
             scope,
             dtype_cache: RefCell::new(HashMap::new()),
@@ -179,23 +199,37 @@ impl SimplifyCtx for SimplifyCache<'_> {
     fn return_dtype(&self, expr: &Expression) -> VortexResult<DType> {
         // If the expression is "root", return the scope dtype
         if expr.is_root() {
-            return Ok(self.scope.clone());
+            return Ok(self.scope.root().clone());
+        }
+
+        if let Some(variable) = expr.as_variable() {
+            return self
+                .scope
+                .resolve(variable)
+                .map(|(dtype, _)| dtype.clone())
+                .ok_or_else(|| vortex_err!("unbound variable '{variable}'"));
         }
 
         if let Some(dtype) = self.dtype_cache.borrow().get(expr) {
             return Ok(dtype.clone());
         }
 
-        // Otherwise, compute dtype from children
-        let input_dtypes: Vec<_> = expr
-            .children()
-            .iter()
-            .map(|c| self.return_dtype(c))
-            .try_collect()?;
-        let dtype = expr
-            .as_scalar()
-            .ok_or_else(|| vortex_err!("cannot type a non-scalar expression: {expr}"))?
-            .return_dtype(&input_dtypes)?;
+        let dtype = match expr {
+            Expression::Scalar { scalar_fn, .. } => {
+                let input_dtypes: Vec<_> = expr
+                    .children()
+                    .iter()
+                    .map(|child| self.return_dtype(child))
+                    .try_collect()?;
+                scalar_fn.return_dtype(&input_dtypes)?
+            }
+            Expression::Lambda(_) => {
+                return Err(vortex_err!(
+                    "a lambda has no standalone return dtype; it must be bound by a higher-order function"
+                ));
+            }
+            Expression::Root | Expression::Variable(_) => unreachable!("handled above"),
+        };
         self.dtype_cache
             .borrow_mut()
             .insert(expr.clone(), dtype.clone());
@@ -213,6 +247,8 @@ mod tests {
     use crate::dtype::Nullability;
     use crate::dtype::PType;
     use crate::dtype::StructFields;
+    use crate::expr::Scope;
+    use crate::expr::Variable;
     use crate::expr::cast;
     use crate::expr::col;
     use crate::expr::eq;
@@ -222,6 +258,7 @@ mod tests {
     use crate::expr::or;
     use crate::expr::root;
     use crate::expr::test_harness::struct_dtype;
+    use crate::expr::var;
     use crate::scalar::Scalar;
     use crate::scalar_fn::fns::literal::Literal;
 
@@ -286,6 +323,19 @@ mod tests {
         );
         let optimized = expr.optimize_recursive(&struct_dtype())?;
         assert_ne!(optimized, expr, "casting a literal should fold");
+        Ok(())
+    }
+
+    #[test]
+    fn optimization_resolves_variables_from_a_lexical_scope() -> VortexResult<()> {
+        let scope = Scope::new(DType::Null).with_bindings([(
+            Variable::new("value"),
+            DType::Primitive(PType::I32, Nullability::NonNullable),
+        )])?;
+        let expression = eq(var("value"), lit(42_i32));
+
+        let optimized = expression.optimize_recursive_scope(&scope)?;
+        assert_eq!(optimized, expression);
         Ok(())
     }
 }

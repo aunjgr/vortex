@@ -171,6 +171,7 @@ impl PartialEq for ExactExpr {
         match (&self.0, &other.0) {
             (Expression::Root, Expression::Root) => true,
             (Expression::Variable(lhs), Expression::Variable(rhs)) => lhs == rhs,
+            (Expression::Lambda(lhs), Expression::Lambda(rhs)) => lhs == rhs,
             (
                 Expression::Scalar {
                     scalar_fn: lhs_fn,
@@ -194,6 +195,10 @@ impl Hash for ExactExpr {
             Expression::Variable(variable) => {
                 state.write_u8(2);
                 variable.hash(state);
+            }
+            Expression::Lambda(lambda) => {
+                state.write_u8(3);
+                lambda.hash(state);
             }
             Expression::Scalar {
                 scalar_fn,

@@ -85,6 +85,7 @@ pub use array::*;
 pub use canonical::*;
 pub use columnar::*;
 pub use executor::*;
+pub use expression::Bindings;
 pub use hash::*;
 pub use mask_future::*;
 pub use metadata::*;

@@ -56,6 +56,18 @@ impl Lambda {
     pub fn body(&self) -> &Expression {
         &self.body
     }
+
+    /// Take the body when this lambda is its sole owner.
+    ///
+    /// This is used by expression's iterative drop implementation so a chain of binder bodies
+    /// cannot overflow the stack while it is being released.
+    pub(crate) fn take_body(&mut self) -> Option<Expression> {
+        Arc::try_unwrap(std::mem::replace(
+            &mut self.body,
+            Arc::new(Expression::Root),
+        ))
+        .ok()
+    }
 }
 
 impl Display for Lambda {

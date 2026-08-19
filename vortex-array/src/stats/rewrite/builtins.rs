@@ -798,15 +798,15 @@ mod tests {
     }
 
     fn falsify(expr: &Expression) -> VortexResult<Option<BoundExpression>> {
-        expr.bind(&test_scope())?.falsify(&SESSION)
+        expr.bind(test_scope())?.falsify(&SESSION)
     }
 
     fn satisfy(expr: &Expression) -> VortexResult<Option<BoundExpression>> {
-        expr.bind(&test_scope())?.satisfy(&SESSION)
+        expr.bind(test_scope())?.satisfy(&SESSION)
     }
 
     fn bind_expected(expr: Option<Expression>) -> VortexResult<Option<BoundExpression>> {
-        expr.map(|expr| expr.bind(&test_scope())).transpose()
+        expr.map(|expr| expr.bind(test_scope())).transpose()
     }
 
     fn all_null(expr: &Expression) -> Expression {

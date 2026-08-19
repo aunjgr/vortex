@@ -306,7 +306,7 @@ fn with_children_replaces_children_in_order() -> VortexResult<()> {
 
 #[test]
 fn eval_try_new_validates_expression_root_dtype() -> VortexResult<()> {
-    let expression = root().bind(&primitive(PType::I32, Nullability::NonNullable))?;
+    let expression = root().bind(primitive(PType::I32, Nullability::NonNullable))?;
     let child = make_plan(flat(3, primitive(PType::I64, Nullability::NonNullable), 0))?;
 
     let error = EvalPlan::try_new(expression, child)

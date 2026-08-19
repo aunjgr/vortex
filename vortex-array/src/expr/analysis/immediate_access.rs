@@ -112,7 +112,7 @@ mod tests {
             .as_struct_fields_opt()
             .vortex_expect("test scope is a struct");
 
-        let bound = var("x").bind_scope(&Scope::new(scope_dtype.clone()).with_bindings([(
+        let bound = var("x").bind(&Scope::new(scope_dtype.clone()).with_bindings([(
             Variable::new("x"),
             DType::Primitive(PType::I32, Nullability::NonNullable),
         )])?)?;

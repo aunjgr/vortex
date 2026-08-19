@@ -800,7 +800,7 @@ mod tests {
         // [1] = byte_length(root)
         assert_eq!(
             outer,
-            cast(pushed_ref(0), target).bind(&pushed_scope(&inner))?
+            cast(pushed_ref(0), target).bind(pushed_scope(&inner))?
         );
         assert_eq!(inner, pushed_inner([byte_length(root())]).bind(&dtype)?);
         test_apply(expr, outer, inner)
@@ -812,7 +812,7 @@ mod tests {
         let dtype = DType::Utf8(false.into());
         let (outer, inner) = split_bound(expr.clone(), &dtype)?;
         let inner = inner.unwrap();
-        assert_eq!(outer, pushed_ref(0).bind(&pushed_scope(&inner))?);
+        assert_eq!(outer, pushed_ref(0).bind(pushed_scope(&inner))?);
         assert_eq!(inner, pushed_inner([byte_length(root())]).bind(&dtype)?);
         test_apply(expr, outer, inner)
     }

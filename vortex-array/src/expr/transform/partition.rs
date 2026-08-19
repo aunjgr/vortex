@@ -16,6 +16,7 @@ use crate::dtype::FieldNames;
 use crate::dtype::Nullability;
 use crate::dtype::StructFields;
 use crate::expr::Expression;
+use crate::expr::Scope;
 use crate::expr::analysis::Annotation;
 use crate::expr::analysis::AnnotationFn;
 use crate::expr::analysis::Annotations;
@@ -48,14 +49,43 @@ where
     A::Annotation: Display,
     FieldName: From<A::Annotation>,
 {
+    partition_scope(expr, &Scope::new(scope.clone()), annotate_fn)
+}
+
+/// Partition an expression against a lexical scope.
+///
+/// Variable references remain leaves in the resulting partitions and are resolved from `scope`
+/// when the partitions are later bound or applied.
+pub fn partition_scope<A: AnnotationFn>(
+    expr: Expression,
+    scope: &Scope,
+    annotate_fn: A,
+) -> VortexResult<PartitionedExpr<A::Annotation>>
+where
+    A::Annotation: Display,
+    FieldName: From<A::Annotation>,
+{
     // Annotate each expression with the annotations that any of its descendent expressions have.
     let annotations = descendent_annotations(&expr, annotate_fn);
-    partition_annotations(expr.clone(), scope, annotations)
+    partition_annotations_scope(expr.clone(), scope, annotations)
 }
 
 pub fn partition_annotations<A>(
     expr: Expression,
     scope: &DType,
+    annotations: Annotations<A>,
+) -> VortexResult<PartitionedExpr<A>>
+where
+    A: Display + Clone + Eq + Hash,
+    FieldName: From<A>,
+{
+    partition_annotations_scope(expr, &Scope::new(scope.clone()), annotations)
+}
+
+/// Partition an expression with already-computed annotations against a lexical scope.
+pub fn partition_annotations_scope<A>(
+    expr: Expression,
+    scope: &Scope,
     annotations: Annotations<A>,
 ) -> VortexResult<PartitionedExpr<A>>
 where
@@ -83,7 +113,7 @@ where
             Nullability::NonNullable,
         );
 
-        let expr = expr.optimize_recursive(scope)?;
+        let expr = expr.optimize_recursive_scope(scope)?;
         let expr_dtype = expr.return_dtype(scope)?;
 
         partitions.push(expr);
@@ -101,7 +131,7 @@ where
     );
 
     Ok(PartitionedExpr {
-        root: root.optimize_recursive(&root_scope)?,
+        root: root.optimize_recursive_scope(&scope.with_root(root_scope))?,
         partitions: partitions.into_boxed_slice(),
         partition_names,
         partition_dtypes: partition_dtypes.into_boxed_slice(),
@@ -223,6 +253,8 @@ mod tests {
     use crate::dtype::Nullability::NonNullable;
     use crate::dtype::PType::I32;
     use crate::dtype::StructFields;
+    use crate::expr::Scope;
+    use crate::expr::Variable;
     use crate::expr::analysis::make_free_field_annotator;
     use crate::expr::and;
     use crate::expr::col;
@@ -232,6 +264,7 @@ mod tests {
     use crate::expr::pack;
     use crate::expr::root;
     use crate::expr::transform::replace::replace_root_fields;
+    use crate::expr::var;
 
     #[fixture]
     fn dtype() -> DType {
@@ -268,6 +301,22 @@ mod tests {
         let partitioned = partition(expr, &dtype, make_free_field_annotator(fields)).unwrap();
 
         assert_eq!(partitioned.partitions.len(), fields.names().len());
+    }
+
+    #[rstest]
+    fn partition_scope_preserves_lexical_variables(dtype: DType) -> VortexResult<()> {
+        let scope = Scope::new(dtype.clone())
+            .with_bindings([(Variable::new("offset"), DType::Primitive(I32, NonNullable))])?;
+        let fields = dtype
+            .as_struct_fields_opt()
+            .vortex_expect("test dtype must be a struct");
+        let expression = crate::expr::checked_add(var("offset"), col("b"));
+
+        let partitioned = partition_scope(expression, &scope, make_free_field_annotator(fields))?;
+
+        assert_eq!(partitioned.partitions.len(), 1);
+        assert!(partitioned.partitions[0].to_string().contains("$offset"));
+        Ok(())
     }
 
     #[rstest]

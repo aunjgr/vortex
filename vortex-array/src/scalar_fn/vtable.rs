@@ -23,6 +23,7 @@ use crate::arrays::ScalarFnArray;
 use crate::dtype::DType;
 use crate::expr::BoundExpression;
 use crate::expr::Expression;
+use crate::expr::Scope;
 use crate::expr::display::ExprDisplay;
 use crate::scalar_fn::ScalarFnId;
 use crate::scalar_fn::ScalarFnRef;
@@ -251,12 +252,12 @@ pub trait ReduceNode: Clone {
 #[derive(Clone)]
 pub struct ExpressionReduceNode<'a> {
     expression: Cow<'a, Expression>,
-    scope: &'a DType,
+    scope: &'a Scope,
 }
 
 impl<'a> ExpressionReduceNode<'a> {
     /// Creates a node borrowing the given expression and scope.
-    pub fn new(expression: &'a Expression, scope: &'a DType) -> Self {
+    pub fn new(expression: &'a Expression, scope: &'a Scope) -> Self {
         Self {
             expression: Cow::Borrowed(expression),
             scope,

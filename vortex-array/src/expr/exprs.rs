@@ -61,7 +61,7 @@ use crate::scalar_fn::fns::zip::Zip;
 
 /// Creates an expression that references the root scope.
 ///
-/// Returns the entire input array as passed to the expression evaluator.
+/// Returns the entire input array as passed to the expression application context.
 /// This is commonly used as the starting point for field access and other operations.
 pub fn root() -> Expression {
     Expression::Root
@@ -83,8 +83,8 @@ pub fn var(name: impl AsRef<str>) -> Expression {
 pub fn lambda(
     params: impl IntoIterator<Item = impl Into<Variable>>,
     body: Expression,
-) -> VortexResult<Lambda> {
-    Lambda::try_new(params, body)
+) -> VortexResult<Expression> {
+    Ok(Expression::Lambda(Lambda::try_new(params, body)?))
 }
 
 /// Return whether the expression is a root expression.
