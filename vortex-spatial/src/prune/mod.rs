@@ -72,9 +72,7 @@ fn geometry_and_constant<'a>(
         return Ok(None);
     }
 
-    Ok(constant
-        .as_opt::<Literal>()
-        .map(|scalar| (geom, scalar)))
+    Ok(constant.as_opt::<Literal>().map(|scalar| (geom, scalar)))
 }
 
 /// The 2D bounding box of a constant geometry of any type, or `None` for one without an extent

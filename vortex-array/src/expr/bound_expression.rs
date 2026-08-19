@@ -18,6 +18,7 @@ use vortex_session::VortexSession;
 
 use crate::dtype::DType;
 use crate::expr::Expression;
+use crate::expr::Lambda;
 use crate::expr::display::DisplayTreeExpr;
 use crate::expr::scope::Scope;
 use crate::expr::scope::VariableRef;
@@ -49,21 +50,18 @@ pub enum BoundExpression {
         /// consumers from destructuring a `BoundExpression` by value.
         children: Arc<Vec<BoundExpression>>,
     },
-    /// A type-checked lambda binder.
-    ///
-    /// A lambda reports its body dtype as its return dtype, but is not independently executable:
-    /// only a higher-order function may close it over captures and apply it to arguments.
+    /// A lambda with a bound body and bound params.
     Lambda(BoundLambda),
     /// The scope itself. Its dtype is the scope's root dtype.
     Root {
         /// The dtype this node evaluates to.
         dtype: DType,
     },
-    /// A resolved reference to a bound variable.
+    /// A variable with resolved dtype and reference in the bound scope.
     Variable(BoundVariable),
 }
 
-/// A source variable resolved against a lexical scope.
+/// A bound variable.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BoundVariable {
     dtype: DType,
@@ -94,10 +92,9 @@ impl Display for BoundVariable {
     }
 }
 
-/// The payload of [`BoundExpression::Lambda`].
+/// A bound lambda.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BoundLambda {
-    /// The parameters this lambda binds, resolved against its lexical frame.
     params: Arc<Vec<BoundVariable>>,
     body: Arc<BoundExpression>,
 }
@@ -162,11 +159,7 @@ impl PartialEq for ExactBoundExpr {
                     && lhs_dtype == rhs_dtype
             }
             (BoundExpression::Lambda(lhs), BoundExpression::Lambda(rhs)) => lhs == rhs,
-            // No catch-all: a new variant must state its own identity rather than silently
-            // comparing unequal, which would put `eq` out of step with `hash`.
             (BoundExpression::Variable(lhs), BoundExpression::Variable(rhs)) => lhs == rhs,
-            // No catch-all: a new variant must state its own identity, or `eq` drifts out of step
-            // with `hash` and keys stop equalling themselves.
             (BoundExpression::Root { .. }, _)
             | (BoundExpression::Scalar { .. }, _)
             | (BoundExpression::Lambda(_), _)
@@ -397,9 +390,6 @@ impl Display for BoundExpression {
 impl Expression {
     /// Bind this expression against `scope`, type-checking every node in a single walk.
     ///
-    /// Passing a [`DType`] is a root-only convenience; expressions with variables must be bound
-    /// against an explicit [`Scope`].
-    ///
     /// The returned tree carries a dtype on each node, so callers needing types at more than one
     /// node should bind once and read fields rather than calling
     /// [`return_dtype`](Expression::return_dtype) repeatedly.
@@ -436,7 +426,7 @@ impl Expression {
         }
     }
 
-    fn bind_lambda(lambda: &crate::expr::Lambda, scope: &Scope) -> VortexResult<BoundLambda> {
+    fn bind_lambda(lambda: &Lambda, scope: &Scope) -> VortexResult<BoundLambda> {
         vortex_ensure!(
             scope.depth() > 0,
             "a lambda can be bound only in a scope with a parameter frame"
@@ -659,7 +649,7 @@ mod tests {
                 .vortex_expect("lambda body must resolve its parameter"),
             parameter
         );
-        assert!(lambda.bind(&scope()).is_err());
+        assert!(lambda.bind(scope()).is_err());
         Ok(())
     }
 
