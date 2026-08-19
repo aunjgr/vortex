@@ -77,7 +77,7 @@ pub fn var(name: impl AsRef<str>) -> Expression {
     Variable::new(name).into()
 }
 
-/// Creates standalone lambda syntax binding `params` over `body`.
+/// Creates a lambda expression binding variable `params` over a `body` expression.
 ///
 /// Returns an error when a parameter name is repeated in the same lambda.
 pub fn lambda(
