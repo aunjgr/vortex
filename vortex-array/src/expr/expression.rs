@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use vortex_error::VortexExpect;
 use vortex_error::VortexResult;
+use vortex_error::vortex_bail;
 use vortex_error::vortex_ensure;
 
 use crate::dtype::DType;
@@ -41,9 +42,8 @@ pub enum Expression {
         /// Any children of this expression.
         children: Arc<Vec<Expression>>,
     },
-    /// Lambda syntax. A lambda is a binder, not an array-valued expression.
-    ///
-    /// It can be bound only by a higher-order function that supplies its parameter signature.
+    /// A lambda expression. It is not an array-valued expression, and can be bound only by an enclosing
+    /// higher-order function.
     Lambda(Lambda),
     /// The full scope of the expression evaluation.
     Root,
@@ -66,7 +66,7 @@ impl Expression {
             children.len()
         );
         vortex_ensure!(
-            children.iter().all(|child| !child.is_lambda()),
+            children.iter().all(|child| !child.as_lambda().is_some()),
             "a scalar function cannot take a lambda as an ordinary argument"
         );
 
@@ -85,7 +85,7 @@ impl Expression {
     pub fn as_variable(&self) -> Option<&Variable> {
         match self {
             Self::Variable(variable) => Some(variable),
-            _ => None,
+            Self::Root | Self::Lambda(_) | Self::Scalar { .. } => None,
         }
     }
 
@@ -97,16 +97,11 @@ impl Expression {
         }
     }
 
-    /// Whether this node is lambda syntax.
-    pub fn is_lambda(&self) -> bool {
-        self.as_lambda().is_some()
-    }
-
     /// Returns the scalar fn for this expression, or `None` if it is not a scalar node.
     pub fn as_scalar(&self) -> Option<&ScalarFnRef> {
         match self {
             Self::Scalar { scalar_fn, .. } => Some(scalar_fn),
-            _ => None,
+            Self::Root | Self::Variable(_) | Self::Lambda(_) => None,
         }
     }
 
@@ -130,7 +125,7 @@ impl Expression {
             .vortex_expect("Expression options type mismatch")
     }
 
-    /// Returns the sub-expressions of this node.
+    /// Returns the children of this expression.
     pub fn children(&self) -> &[Expression] {
         match self {
             Self::Scalar { children, .. } => children.as_slice(),
@@ -163,9 +158,6 @@ impl Expression {
     }
 
     /// Computes the return dtype of this expression against a lexical scope.
-    ///
-    /// Passing a [`DType`] is a root-only convenience; expressions with variables require an
-    /// explicit [`Scope`].
     pub fn return_dtype(&self, scope: impl Into<Scope>) -> VortexResult<DType> {
         Ok(self.bind(scope)?.dtype().clone())
     }
@@ -181,8 +173,8 @@ impl Expression {
             // function, yielding that array's validity as a non-nullable boolean mask.
             Self::Variable(_) => Ok(is_not_null(self.clone())),
             Self::Scalar { scalar_fn, .. } => scalar_fn.validity(self),
-            Self::Lambda(_) => vortex_error::vortex_bail!(
-                "a lambda has no standalone validity expression; it must be applied by a higher-order function"
+            Self::Lambda(_) => vortex_bail!(
+                "validity for a lambda is only meaningful in the context of its enclosing higher order function"
             ),
         }
     }
