@@ -14,6 +14,7 @@ use crate::expr::Lambda;
 use crate::expr::Variable;
 use crate::scalar_fn::ForeignScalarFnVTable;
 use crate::scalar_fn::ScalarFnId;
+use crate::scalar_fn::ScalarFnRef;
 use crate::scalar_fn::session::ScalarFnSessionExt;
 
 pub trait ExprSerializeProtoExt {
@@ -30,12 +31,9 @@ pub(crate) const VARIABLE_ID: &str = "vortex.var";
 /// The wire id for [`Expression::Lambda`].
 pub(crate) const LAMBDA_ID: &str = "vortex.lambda";
 
-pub trait LambdaSerializeProtoExt {
-    fn serialize_proto(&self) -> VortexResult<pb::Expr>;
-}
-
-impl LambdaSerializeProtoExt for Lambda {
-    fn serialize_proto(&self) -> VortexResult<pb::Expr> {
+impl Lambda {
+    /// Serialize the `Lambda` to its protobuf representation.
+    pub fn serialize_proto(&self) -> VortexResult<pb::Expr> {
         Ok(pb::Expr {
             id: LAMBDA_ID.to_string(),
             children: vec![self.body().serialize_proto()?],
@@ -51,15 +49,11 @@ impl LambdaSerializeProtoExt for Lambda {
             ),
         })
     }
-}
 
-impl Lambda {
+    /// Deserialize the `Lambda` from its protobuf representation.
+    ///
+    /// Assumes that `expr.id == LAMBDA_ID`.
     pub fn from_proto(expr: &pb::Expr, session: &VortexSession) -> VortexResult<Self> {
-        vortex_ensure!(
-            expr.id == LAMBDA_ID,
-            "expected lambda expression id '{LAMBDA_ID}', got '{}'",
-            expr.id
-        );
         vortex_ensure!(
             expr.children.len() == 1,
             "a lambda must have exactly one child, its body, got {}",
@@ -73,51 +67,72 @@ impl Lambda {
     }
 }
 
+impl Variable {
+    /// Serialize the `Variable` to its protobuf representation.
+    pub fn serialize_proto(&self) -> VortexResult<pb::Expr> {
+        Ok(pb::Expr {
+            id: VARIABLE_ID.to_string(),
+            children: vec![],
+            metadata: Some(
+                pb::VariableOpts {
+                    name: self.name().to_string(),
+                }
+                .encode_to_vec(),
+            ),
+        })
+    }
+
+    /// Deserialize the `Variable` from its protobuf representation.
+    ///
+    /// Assumes that `expr.id == VARIABLE_ID`.
+    pub fn from_proto(expr: &pb::Expr) -> VortexResult<Self> {
+        vortex_ensure!(
+            expr.children.is_empty(),
+            "a variable must have no children, got {}",
+            expr.children.len()
+        );
+        let opts = pb::VariableOpts::decode(expr.metadata())?;
+        return Ok(Variable::new(opts.name).into());
+    }
+}
+
+fn serialize_root() -> VortexResult<pb::Expr> {
+    Ok(pb::Expr {
+        id: ROOT_ID.to_string(),
+        children: vec![],
+        metadata: Some(vec![]),
+    })
+}
+
+fn serialize_scalar(scalar_fn: &ScalarFnRef, children: &[Expression]) -> VortexResult<pb::Expr> {
+    let children_ser = children
+        .iter()
+        .map(|child| child.serialize_proto())
+        .try_collect()?;
+
+    let metadata = scalar_fn
+        .options()
+        .serialize()?
+        .ok_or_else(|| vortex_err!("Expression '{}' is not serializable", scalar_fn.id()))?;
+
+    Ok(pb::Expr {
+        id: scalar_fn.id().to_string(),
+        children: children_ser,
+        metadata: Some(metadata),
+    })
+}
+
 impl ExprSerializeProtoExt for Expression {
     fn serialize_proto(&self) -> VortexResult<pb::Expr> {
-        let scalar_fn = match self {
-            Expression::Lambda(lambda) => return lambda.serialize_proto(),
-            Expression::Root => {
-                return Ok(pb::Expr {
-                    id: ROOT_ID.to_string(),
-                    children: vec![],
-                    metadata: Some(vec![]),
-                });
-            }
-            Expression::Variable(variable) => {
-                return Ok(pb::Expr {
-                    id: VARIABLE_ID.to_string(),
-                    children: vec![],
-                    metadata: Some(
-                        pb::VariableOpts {
-                            name: variable.name().to_string(),
-                        }
-                        .encode_to_vec(),
-                    ),
-                });
-            }
-            Expression::Scalar { scalar_fn, .. } => scalar_fn,
-        };
-
-        let children = self
-            .children()
-            .iter()
-            .map(|child| child.serialize_proto())
-            .try_collect()?;
-
-        let metadata = scalar_fn.options().serialize()?.ok_or_else(|| {
-            vortex_err!(
-                "Expression '{}' is not serializable: {}",
-                scalar_fn.id(),
-                self
-            )
-        })?;
-
-        Ok(pb::Expr {
-            id: scalar_fn.id().to_string(),
-            children,
-            metadata: Some(metadata),
-        })
+        match self {
+            Expression::Lambda(lambda) => lambda.serialize_proto(),
+            Expression::Root => serialize_root(),
+            Expression::Variable(variable) => variable.serialize_proto(),
+            Expression::Scalar {
+                scalar_fn,
+                children,
+            } => serialize_scalar(scalar_fn, children),
+        }
     }
 }
 
@@ -135,17 +150,11 @@ impl Expression {
         }
 
         if expr.id == VARIABLE_ID {
-            vortex_ensure!(
-                expr.children.is_empty(),
-                "a variable must have no children, got {}",
-                expr.children.len()
-            );
-            let opts = pb::VariableOpts::decode(expr.metadata())?;
-            return Ok(Expression::Variable(Variable::new(opts.name)));
+            return Ok(Variable::from_proto(expr)?.into());
         }
 
         if expr.id == LAMBDA_ID {
-            return Ok(Expression::Lambda(Lambda::from_proto(expr, session)?));
+            return Ok(Lambda::from_proto(expr, session)?.into());
         }
 
         #[expect(clippy::disallowed_methods, reason = "interning a dynamic id")]
