@@ -84,7 +84,7 @@ pub fn lambda(
     params: impl IntoIterator<Item = impl Into<Variable>>,
     body: Expression,
 ) -> VortexResult<Expression> {
-    Ok(Expression::Lambda(Lambda::try_new(params, body)?))
+    Ok(Lambda::try_new(params, body)?.into())
 }
 
 /// Return whether the expression is a root expression.

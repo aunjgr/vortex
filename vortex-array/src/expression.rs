@@ -64,20 +64,16 @@ pub(crate) fn apply(
             );
             return Ok(root);
         }
-        BoundExpression::Variable {
-            dtype,
-            variable,
-            variable_ref,
-            ..
-        } => {
+        BoundExpression::Variable(variable) => {
             let array = ctx
-                .binding(*variable_ref)
+                .binding(variable.variable_ref())
                 .cloned()
                 .ok_or_else(|| vortex_err!("cannot apply unbound variable '{variable}'"))?;
             vortex_ensure!(
-                array.dtype() == dtype,
-                "binding for variable '{variable}' has dtype {}, expected {dtype}",
-                array.dtype()
+                array.dtype() == variable.dtype(),
+                "binding for variable '{variable}' has dtype {}, expected {}",
+                array.dtype(),
+                variable.dtype(),
             );
             vortex_ensure!(
                 array.len() == root.len(),
@@ -87,7 +83,7 @@ pub(crate) fn apply(
             );
             return Ok(array);
         }
-        BoundExpression::Lambda { .. } => {
+        BoundExpression::Lambda(_) => {
             return Err(vortex_err!(
                 "a lambda can be applied only by the binder that established its scope"
             ));

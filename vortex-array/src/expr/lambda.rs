@@ -76,6 +76,12 @@ impl Display for Lambda {
     }
 }
 
+impl From<Lambda> for Expression {
+    fn from(lambda: Lambda) -> Self {
+        Expression::Lambda(lambda)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

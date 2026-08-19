@@ -8,6 +8,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
+use crate::dtype::FieldName;
 use crate::expr::Expression;
 
 /// The name of a value bound in a [`Scope`](crate::expr::Scope).
@@ -54,9 +55,21 @@ impl From<Variable> for Expression {
     }
 }
 
-impl<T: AsRef<str>> From<T> for Variable {
-    fn from(name: T) -> Self {
-        Self::new(name)
+impl From<FieldName> for Variable {
+    fn from(field_name: FieldName) -> Self {
+        Variable(field_name.take())
+    }
+}
+
+impl From<&str> for Variable {
+    fn from(value: &str) -> Self {
+        Self(value.into())
+    }
+}
+
+impl AsRef<str> for Variable {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 
