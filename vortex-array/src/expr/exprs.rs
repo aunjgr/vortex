@@ -61,7 +61,7 @@ use crate::scalar_fn::fns::zip::Zip;
 
 /// Creates an expression that references the root scope.
 ///
-/// Returns the entire input array as passed to the expression application context.
+/// Returns the entire input array as passed to the expression evaluator.
 /// This is commonly used as the starting point for field access and other operations.
 pub fn root() -> Expression {
     Expression::Root
