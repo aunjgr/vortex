@@ -80,47 +80,6 @@ pub struct BoundLambda {
 }
 
 impl BoundLambda {
-    /// Bind `lambda` against a scope containing its parameter bindings.
-    ///
-    /// The higher-order function determines each parameter type and installs it in `scope`
-    /// before binding. Keeping the bindings in one scope makes that scope the single source of
-    /// truth for both the lambda body and its function signature.
-    pub fn bind(lambda: &crate::expr::Lambda, scope: &Scope) -> VortexResult<Self> {
-        vortex_ensure!(
-            scope.depth() > 0,
-            "lambda parameters must be bound in a lexical frame"
-        );
-        let parameter_frame = scope.depth() - 1;
-        let parameter_bindings = lambda
-            .params()
-            .iter()
-            .map(|param| {
-                scope
-                    .resolve(param)
-                    .map(|(dtype, variable_ref)| (dtype.clone(), variable_ref))
-                    .ok_or_else(|| {
-                        vortex_err!("lambda parameter '{param}' is not bound in its scope")
-                    })
-            })
-            .collect::<VortexResult<Vec<_>>>()?;
-        vortex_ensure!(
-            parameter_bindings
-                .iter()
-                .all(|(_, variable_ref)| variable_ref.frame() == parameter_frame),
-            "lambda parameters must be bound in the innermost lexical frame"
-        );
-        let body = lambda.body().bind(scope)?;
-
-        Ok(Self {
-            params: lambda.params().to_vec().into_boxed_slice(),
-            param_dtypes: parameter_bindings
-                .iter()
-                .map(|(dtype, _)| dtype.clone())
-                .collect(),
-            body: Arc::new(body),
-        })
-    }
-
     /// The variables this lambda binds, in declaration order.
     pub fn params(&self) -> &[Variable] {
         &self.params
@@ -474,10 +433,45 @@ impl Expression {
                     .try_collect()?;
                 BoundExpression::try_new(scalar_fn.clone(), children)
             }
-            Expression::Lambda(_) => {
-                vortex_bail!("a lambda can be bound only as an argument to a higher-order function")
-            }
+            Expression::Lambda(lambda) => Ok(BoundExpression::Lambda {
+                lambda: Self::bind_lambda(lambda, scope)?,
+            }),
         }
+    }
+
+    fn bind_lambda(lambda: &crate::expr::Lambda, scope: &Scope) -> VortexResult<BoundLambda> {
+        vortex_ensure!(
+            scope.depth() > 0,
+            "a lambda can be bound only in a scope with a parameter frame"
+        );
+        let parameter_frame = scope.depth() - 1;
+        let parameter_bindings = lambda
+            .params()
+            .iter()
+            .map(|parameter| {
+                scope
+                    .resolve(parameter)
+                    .map(|(dtype, variable_ref)| (dtype.clone(), variable_ref))
+                    .ok_or_else(|| {
+                        vortex_err!("lambda parameter '{parameter}' is not bound in its scope")
+                    })
+            })
+            .collect::<VortexResult<Vec<_>>>()?;
+        vortex_ensure!(
+            parameter_bindings
+                .iter()
+                .all(|(_, variable_ref)| variable_ref.frame() == parameter_frame),
+            "lambda parameters must be bound in the innermost lexical frame"
+        );
+
+        Ok(BoundLambda {
+            params: lambda.params().to_vec().into_boxed_slice(),
+            param_dtypes: parameter_bindings
+                .iter()
+                .map(|(dtype, _)| dtype.clone())
+                .collect(),
+            body: Arc::new(lambda.body().bind_inner(scope)?),
+        })
     }
 }
 
@@ -648,17 +642,17 @@ mod tests {
     #[test]
     fn lambda_signature_comes_from_its_scope() -> VortexResult<()> {
         let lambda = lambda(["value"], var("value"))?;
-        let lambda = lambda
-            .as_lambda()
-            .vortex_expect("lambda factory must return lambda syntax");
         let value_dtype = DType::Primitive(PType::I64, Nullability::Nullable);
         let lambda_scope =
             scope().with_bindings([(Variable::new("value"), value_dtype.clone())])?;
 
-        let bound = BoundLambda::bind(lambda, &lambda_scope)?;
+        let bound = lambda.bind(&lambda_scope)?;
+        let bound = bound
+            .as_lambda()
+            .vortex_expect("a bound lambda expression must contain a bound lambda");
         assert_eq!(bound.body_dtype(), &value_dtype);
         assert_eq!(bound.param_dtypes(), &[value_dtype]);
-        assert!(BoundLambda::bind(lambda, &scope()).is_err());
+        assert!(lambda.bind(&scope()).is_err());
         Ok(())
     }
 
