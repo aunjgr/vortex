@@ -6,6 +6,8 @@ use std::fmt;
 
 use vortex_array::EmptyMetadata;
 use vortex_array::expr::BoundExpression;
+use vortex_array::expr::traversal::TraversalOrder;
+use vortex_array::expr::traversal::pre_order_visit_down;
 use vortex_error::VortexResult;
 use vortex_error::vortex_bail;
 use vortex_session::registry::CachedId;
@@ -116,6 +118,18 @@ impl PlanVTable for Eval {
 }
 
 fn validate_expression_child(expression: &BoundExpression, child: &PlanRef) -> VortexResult<()> {
+    pre_order_visit_down(expression, |expression| match expression {
+        BoundExpression::Lambda(_) => {
+            vortex_bail!("Eval cannot evaluate a standalone lambda")
+        }
+        BoundExpression::Variable(_) => {
+            vortex_bail!("Eval cannot evaluate a standalone variable")
+        }
+        BoundExpression::Scalar { .. } | BoundExpression::Root { .. } => {
+            Ok(TraversalOrder::Continue)
+        }
+    })?;
+
     if !expression.is_root_bound_to(child.dtype()) {
         vortex_bail!(
             "Eval expression is not bound to child dtype {}",
