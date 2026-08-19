@@ -10,8 +10,12 @@ pub fn label_is_fallible(expr: &Expression) -> BooleanLabels<'_> {
         expr,
         |expr| match expr {
             Expression::Scalar { scalar_fn, .. } => scalar_fn.signature().is_fallible(),
-            Expression::Lambda(_) => true,
-            Expression::Root | Expression::Variable(_) => false,
+            // Fallibilty is not meaningful for a Lambda itself.
+            Expression::Lambda(_) => false,
+            // Fallibility is not meaningful for a Variable itself.
+            Expression::Variable(_) => false,
+            // The scope itself cannot fail.
+            Expression::Root => false,
         },
         |acc, &child| acc | child,
     )
