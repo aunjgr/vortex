@@ -209,5 +209,11 @@ fn optimize_lookup_predicate(bencher: Bencher, predicate_case: &PredicateCase) {
     let scope = scope();
     let predicate = lookup_predicate(*predicate_case);
 
-    bencher.bench(|| black_box(predicate.optimize_recursive(&scope)));
+    bencher.bench(|| {
+        black_box(
+            predicate
+                .bind(&scope)
+                .and_then(|expr| expr.optimize_recursive()),
+        )
+    });
 }
