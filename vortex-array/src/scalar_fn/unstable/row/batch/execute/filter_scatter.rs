@@ -17,10 +17,7 @@ use super::super::args::BorrowedRowFnArgs;
 use crate::ArrayRef;
 use crate::ExecutionCtx;
 use crate::IntoArray;
-use crate::arrays::BoolArray;
-use crate::arrays::MaskedArray;
 use crate::arrays::PrimitiveArray;
-use crate::builtins::ArrayBuiltins;
 use crate::dtype::Nullability;
 use crate::validity::Validity;
 
@@ -67,8 +64,7 @@ impl RowFnExecutionArgs {
             );
         };
 
-        // Map each valid row to its position in `filtered`. Invalid rows use index zero because
-        // their gathered values are masked below.
+        // Map each valid row to its position in `filtered`.
         let mut take_indices = vec![0u64; original_len];
 
         let valid_rows = valid_slices.iter().flat_map(|&(start, end)| start..end);
@@ -76,25 +72,13 @@ impl RowFnExecutionArgs {
             take_indices[original_idx] = u64::try_from(filtered_idx)?;
         }
 
-        let take_indices = PrimitiveArray::new(take_indices, Validity::NonNullable).into_array();
-
-        let expanded = filtered.take(take_indices)?;
-
-        // A nullable gathered array cannot be wrapped because a `Masked` child must be all valid.
-        // The general masking pass unions its nulls with the batch validity instead.
-        if expanded.dtype().is_nullable() {
-            let validity_array =
-                BoolArray::new(original_validity.to_bit_buffer(), Validity::NonNullable)
-                    .into_array();
-
-            return expanded.mask(validity_array);
-        }
-
-        // The gathered values are all valid, so attaching validity is sufficient.
-        Ok(MaskedArray::try_new(
-            expanded,
+        // Null indices restore invalid rows without selecting a value from `filtered`.
+        let take_indices = PrimitiveArray::new(
+            take_indices,
             Validity::from_mask(original_validity.clone(), Nullability::Nullable),
-        )?
-        .into_array())
+        )
+        .into_array();
+
+        filtered.take(take_indices)
     }
 }
