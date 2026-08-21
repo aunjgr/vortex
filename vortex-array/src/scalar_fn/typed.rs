@@ -92,7 +92,7 @@ pub(super) trait DynScalarFn: 'static + Send + Sync + super::sealed::Sealed {
     fn arity(&self) -> Arity;
     fn child_name(&self, child_idx: usize) -> ChildName;
     fn is_strict(&self) -> bool;
-    fn is_fallible(&self) -> bool;
+    fn is_infallible(&self) -> bool;
 
     // Expression methods — take expressions for tree traversal
     fn fmt_sql(&self, expression: &dyn ExprDisplay, f: &mut Formatter<'_>) -> fmt::Result;
@@ -192,8 +192,8 @@ impl<V: ScalarFnVTable> DynScalarFn for TypedScalarFnInstance<V> {
         V::is_strict(&self.vtable, &self.options)
     }
 
-    fn is_fallible(&self) -> bool {
-        V::is_fallible(&self.vtable, &self.options)
+    fn is_infallible(&self) -> bool {
+        V::is_infallible(&self.vtable, &self.options)
     }
 
     fn fmt_sql(&self, expression: &dyn ExprDisplay, f: &mut Formatter<'_>) -> fmt::Result {

@@ -199,9 +199,9 @@ impl ScalarFnVTable for GetItem {
         true
     }
 
-    fn is_fallible(&self, _field_name: &FieldName) -> bool {
-        // If this type-checks its infallible.
-        false
+    fn is_infallible(&self, _field_name: &FieldName) -> bool {
+        // If this type-checks, it is infallible.
+        true
     }
 }
 

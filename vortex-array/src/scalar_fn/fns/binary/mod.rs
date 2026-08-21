@@ -274,10 +274,9 @@ impl ScalarFnVTable for Binary {
         !matches!(operator, Operator::And | Operator::Or)
     }
 
-    fn is_fallible(&self, operator: &Operator) -> bool {
-        // Opt-in not out for fallibility.
+    fn is_infallible(&self, operator: &Operator) -> bool {
         // Arithmetic operations could be better modelled here.
-        let infallible = matches!(
+        matches!(
             operator,
             Operator::Eq
                 | Operator::NotEq
@@ -287,9 +286,7 @@ impl ScalarFnVTable for Binary {
                 | Operator::Lte
                 | Operator::And
                 | Operator::Or
-        );
-
-        !infallible
+        )
     }
 }
 

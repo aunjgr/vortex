@@ -81,8 +81,8 @@ impl<F: RowFn> ScalarFnVTable for F {
         true
     }
 
-    fn is_fallible(&self, _options: &Self::Options) -> bool {
-        !F::INFALLIBLE
+    fn is_infallible(&self, _options: &Self::Options) -> bool {
+        F::INFALLIBLE
     }
 }
 

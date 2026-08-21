@@ -194,8 +194,8 @@ impl ScalarFnVTable for SpatialConvexHull {
         true
     }
 
-    fn is_fallible(&self, _: &Self::Options) -> bool {
-        false
+    fn is_infallible(&self, _: &Self::Options) -> bool {
+        true
     }
 }
 

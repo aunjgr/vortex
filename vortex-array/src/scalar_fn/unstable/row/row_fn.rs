@@ -49,8 +49,8 @@ pub trait RowFn: 'static + Sized + Clone + Send + Sync {
 
     /// Whether every dispatch is infallible.
     ///
-    /// See [`ScalarFnVTable::is_fallible`](crate::scalar_fn::ScalarFnVTable::is_fallible) for a
-    /// more detailed explanation of semantic errors.
+    /// See [`ScalarFnVTable::is_infallible`](crate::scalar_fn::ScalarFnVTable::is_infallible) for
+    /// a more detailed explanation of semantic errors.
     ///
     /// The framework checks dispatched element and result types. A conservative `false` is allowed.
     const INFALLIBLE: bool;

@@ -186,8 +186,8 @@ impl ScalarFnVTable for Like {
         true
     }
 
-    fn is_fallible(&self, _options: &Self::Options) -> bool {
-        false
+    fn is_infallible(&self, _options: &Self::Options) -> bool {
+        true
     }
 }
 
@@ -745,9 +745,9 @@ mod tests {
                 .is_some_and(|f| f.signature().is_strict())
         );
         assert!(
-            !like_expr
+            like_expr
                 .as_scalar()
-                .is_some_and(|f| f.signature().is_fallible())
+                .is_some_and(|f| f.signature().is_infallible())
         );
     }
 

@@ -101,6 +101,10 @@ jobs:
             name: String Encoding
             v4_ingest: false
     steps:
+      - uses: runs-on/action@v2
+        if: github.repository == 'vortex-data/vortex'
+        with:
+          sccache: s3
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Install DuckDB

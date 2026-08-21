@@ -130,7 +130,7 @@ impl ArrayParentReduceRule<Dict> for DictionaryScalarFnValuesPushDownRule {
 
         // If the scalar function is fallible, we cannot push it down since it may fail over a
         // value that isn't referenced by any code.
-        if !array.all_values_referenced && sig.is_fallible() {
+        if !array.all_values_referenced && !sig.is_infallible() {
             tracing::trace!(
                 "Not pushing down fallible scalar function {} over dictionary with sparse codes {}",
                 parent.scalar_fn(),

@@ -144,17 +144,17 @@ impl PlanParentReduceRule<Take> for ExpressionTakeRule {
                 Some(scalar_fn) => (
                     false,
                     scalar_fn.signature().is_strict(),
-                    scalar_fn.signature().is_fallible(),
+                    scalar_fn.signature().is_infallible(),
                 ),
-                None => (true, true, false),
+                None => (true, true, true),
             },
-            |acc, &child| (acc.0 | child.0, acc.1 & child.1, acc.2 | child.2),
+            |acc, &child| (acc.0 | child.0, acc.1 & child.1, acc.2 & child.2),
         );
-        let (references_root, is_strict, is_fallible) = labels
+        let (references_root, is_strict, is_infallible) = labels
             .get(&ExactBoundExpr(expression.clone()))
             .copied()
-            .unwrap_or((false, false, true));
-        if !references_root || !is_strict || is_fallible {
+            .unwrap_or((false, false, false));
+        if !references_root || !is_strict || !is_infallible {
             return Ok(None);
         }
 
