@@ -77,9 +77,7 @@ impl BoundExpression {
         // Apply the between optimization once at the top level only.
         // TODO(ngates): remove the "between" optimization, or rewrite it to not always convert
         // to CNF?
-        Ok(Some(find_between_bound(
-            result.unwrap_or_else(|| self.clone()),
-        )))
+        Ok(find_between_bound(result.as_ref().unwrap_or(self)).or(result))
     }
 
     fn try_optimize_recursive_inner(&self) -> VortexResult<Option<BoundExpression>> {
