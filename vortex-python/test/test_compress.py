@@ -48,8 +48,8 @@ def test_chunked_encode():
 
 
 def test_table_encode():
-    table = pa.table(  # pyright: ignore[reportCallIssue, reportUnknownVariableType]
-        {  # pyright: ignore[reportArgumentType]
+    table = pa.table(  # ty: ignore[no-matching-overload]
+        {
             "number": pa.chunked_array([pa.array([0, 1, 2]), pa.array([3, 4, 5])]),
             "string": pa.chunked_array(
                 [pa.array(["a", "b", "c"], type=pa.string_view()), pa.array(["d", "e", "f"], type=pa.string_view())]
@@ -61,7 +61,7 @@ def test_table_encode():
     encoded = vortex.array(table)
     arrow = encoded.to_arrow_array()
     assert isinstance(arrow, pa.ChunkedArray)
-    assert arrow.combine_chunks() == pa.StructArray.from_arrays(  # pyright: ignore[reportUnknownMemberType]
+    assert arrow.combine_chunks() == pa.StructArray.from_arrays(
         [pa.array([0, 1, 2, 3, 4, 5]), pa.array(["a", "b", "c", "d", "e", "f"], type=pa.string_view())],
         names=["number", "string"],
     )
@@ -70,7 +70,7 @@ def test_table_encode():
 @pytest.mark.skip(reason="We have no way to guarantee that the vortex-bench data has been downloaded.")
 def test_taxi():
     curdir = Path(os.path.dirname(__file__)).parent.parent
-    table = pq.read_table(curdir / "vortex-bench/data/yellow-tripdata-2023-11.parquet")  # pyright: ignore[reportUnknownMemberType]
+    table = pq.read_table(curdir / "vortex-bench/data/yellow-tripdata-2023-11.parquet")
     compressed = vortex.compress(vortex.array(table[:100]))
     decompressed = compressed.to_arrow_array()
     assert len(decompressed) == 100

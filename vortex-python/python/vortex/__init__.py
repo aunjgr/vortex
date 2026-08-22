@@ -6,7 +6,7 @@ import importlib.metadata
 import importlib.util
 
 from . import _lib, arrays, dataset, expr, file, io, ray, registry, scan
-from ._lib.arrays import (  # pyright: ignore[reportMissingModuleSource]
+from ._lib.arrays import (
     AlpArray,
     AlpRdArray,
     BoolArray,
@@ -33,8 +33,8 @@ from ._lib.arrays import (  # pyright: ignore[reportMissingModuleSource]
     VarBinViewArray,
     ZigZagArray,
 )
-from ._lib.compress import compress  # pyright: ignore[reportMissingModuleSource]
-from ._lib.dtype import (  # pyright: ignore[reportMissingModuleSource]
+from ._lib.compress import compress
+from ._lib.dtype import (
     BinaryDType,
     BoolDType,
     DecimalDType,
@@ -62,12 +62,12 @@ from ._lib.dtype import (  # pyright: ignore[reportMissingModuleSource]
     uint,
     utf8,
 )
-from ._lib.iter import ArrayIterator  # pyright: ignore[reportMissingModuleSource]
-from ._lib.runtime import (  # pyright: ignore[reportMissingModuleSource]
+from ._lib.iter import ArrayIterator
+from ._lib.runtime import (
     set_worker_threads,
     worker_threads,
 )
-from ._lib.scalar import (  # pyright: ignore[reportMissingModuleSource]
+from ._lib.scalar import (
     BinaryScalar,
     BoolScalar,
     # TODO(connor): Is this missing a `DecimalScalar`?
@@ -80,11 +80,11 @@ from ._lib.scalar import (  # pyright: ignore[reportMissingModuleSource]
     Utf8Scalar,
     scalar,
 )
-from ._lib.serde import ArrayContext, SerializedArray  # pyright: ignore[reportMissingModuleSource]
+from ._lib.serde import ArrayContext, SerializedArray
 from .arrays import (
     Array,
     PyArray,
-    _unpickle_array,  # pyright: ignore[reportPrivateUsage]
+    _unpickle_array,
     array,
 )
 from .file import VortexFile, open

@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright the Vortex contributors
-# pyright: reportMissingTypeStubs=false
-# pyright: reportUnknownMemberType=false
-# pyright: reportUnknownArgumentType=false
-# pyright: reportUnknownVariableType=false
 
 import re
 import threading
@@ -134,7 +130,7 @@ def test_streaming_select_columns_pushes_projection(tmp_path: Path):
     selected = dataset.select_columns(["text"])
 
     assert isinstance(selected, vx_datasets.VortexIterableDataset)
-    assert selected._vortex_columns == ("text",)  # pyright: ignore[reportPrivateUsage]
+    assert selected._vortex_columns == ("text",)
     assert list(selected) == [{"text": "zero"}, {"text": "one"}]
 
 
@@ -182,18 +178,18 @@ def test_streaming_resume_with_limit_reads_full_limit(tmp_path: Path):
         vx_datasets.load_dataset(tmp_path / "train.vortex", split="train", limit=8, batch_size=2),
     )
     examples = cast(
-        vx_datasets._VortexExamplesIterable,  # pyright: ignore[reportPrivateUsage]
-        dataset._ex_iterable,  # pyright: ignore[reportPrivateUsage]
+        vx_datasets._VortexExamplesIterable,
+        dataset._ex_iterable,
     )
     # Simulate resuming after the first two rows of the file were already yielded.
-    examples._state_dict = {  # pyright: ignore[reportPrivateUsage]
+    examples._state_dict = {
         "file_idx": 0,
         "file_row_idx": 2,
         "num_yielded": 2,
         "type": type(examples).__name__,
     }
 
-    produced = [row for _key, table in examples._iter_arrow() for row in table.to_pylist()]  # pyright: ignore[reportPrivateUsage]
+    produced = [row for _key, table in examples._iter_arrow() for row in table.to_pylist()]
 
     # The limit of 8 must still be honored: six rows remain after the two already yielded.
     assert produced == rows[2:8]
@@ -262,7 +258,7 @@ def test_streaming_take_splits_limit_across_shards(tmp_path: Path):
     )
     limited = dataset.take(4)
     assert isinstance(limited, vx_datasets.VortexIterableDataset)
-    examples = limited._ex_iterable  # pyright: ignore[reportPrivateUsage]
+    examples = limited._ex_iterable
 
     # DataLoader worker / distributed sharding must split the pushed-down limit so the shards
     # together yield exactly take(n) rows, mirroring TakeExamplesIterable.split_number.
@@ -449,7 +445,7 @@ class _FakeHfApi:
 def test_hub_streaming_resolves_to_hf_uris_without_download(token: bool | None, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(vx_datasets, "HfApi", _FakeHfApi)
 
-    files, store = vx_datasets._resolve_data_files(  # pyright: ignore[reportPrivateUsage]
+    files, store = vx_datasets._resolve_data_files(
         "org/name",
         data_files=None,
         split="train",
@@ -474,7 +470,7 @@ def test_hub_streaming_resolves_to_hf_uris_without_download(token: bool | None, 
 def test_hub_streaming_with_token_false_forces_anonymous_store(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(vx_datasets, "HfApi", _FakeHfApi)
 
-    files, store = vx_datasets._resolve_data_files(  # pyright: ignore[reportPrivateUsage]
+    files, store = vx_datasets._resolve_data_files(
         "org/name",
         data_files=None,
         split="train",
@@ -494,7 +490,7 @@ def test_hub_streaming_with_token_false_forces_anonymous_store(monkeypatch: pyte
 def test_hub_streaming_with_token_uses_authenticated_store(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(vx_datasets, "HfApi", _FakeHfApi)
 
-    files, store = vx_datasets._resolve_data_files(  # pyright: ignore[reportPrivateUsage]
+    files, store = vx_datasets._resolve_data_files(
         "org/name",
         data_files=None,
         split="train",
@@ -525,20 +521,20 @@ def test_hub_streaming_with_token_uses_authenticated_store(monkeypatch: pytest.M
     ],
 )
 def test_parse_hf_uri(uri: str, expected: tuple[str, str | None, str | None]):
-    assert vx_datasets._parse_hf_uri(uri) == expected  # pyright: ignore[reportPrivateUsage]
+    assert vx_datasets._parse_hf_uri(uri) == expected
 
 
 @pytest.mark.parametrize("uri", ["hf://org/name/file.vortex", "hf://datasets/name-only", "hf://datasets/org/@main"])
 def test_parse_hf_uri_invalid(uri: str):
     with pytest.raises(ValueError, match="hf://"):
-        _ = vx_datasets._parse_hf_uri(uri)  # pyright: ignore[reportPrivateUsage]
+        _ = vx_datasets._parse_hf_uri(uri)
 
 
 def test_hf_uri_streaming_resolves_file_and_directory(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(vx_datasets, "HfApi", _FakeHfApi)
 
     def resolve(path: str):
-        return vx_datasets._resolve_data_files(  # pyright: ignore[reportPrivateUsage]
+        return vx_datasets._resolve_data_files(
             path,
             data_files=None,
             split="train",
@@ -561,7 +557,7 @@ def test_hf_uri_streaming_resolves_file_and_directory(monkeypatch: pytest.Monkey
 def test_hf_uri_slash_revision_stays_percent_encoded(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(vx_datasets, "HfApi", _FakeHfApi)
 
-    files, store = vx_datasets._resolve_data_files(  # pyright: ignore[reportPrivateUsage]
+    files, store = vx_datasets._resolve_data_files(
         "hf://datasets/org/name@refs%2Fconvert%2Fparquet",
         data_files=None,
         split="train",
@@ -623,7 +619,7 @@ def test_local_directory_in_data_files(tmp_path: Path):
     ],
 )
 def test_glob_match(pattern: str, path: str, expected: bool):
-    assert vx_datasets._glob_match(path, pattern) is expected  # pyright: ignore[reportPrivateUsage]
+    assert vx_datasets._glob_match(path, pattern) is expected
 
 
 @pytest.mark.parametrize("repo_type", ["dataset", "datasets", "model", "space"])

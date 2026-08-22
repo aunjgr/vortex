@@ -38,7 +38,7 @@ def test_create_fixed_size_list_array_from_arrow():
     # Convert back to Arrow to verify
     result = vx_array.to_arrow_array()
     assert pa.types.is_fixed_size_list(result.type)
-    assert result.type.list_size == 3  # pyright: ignore[reportAny]
+    assert result.type.list_size == 3
     # PyArrow returns FixedSizeListScalar objects that need to be converted
     assert [x.as_py() for x in result] == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
 
@@ -52,7 +52,7 @@ def test_create_nullable_fixed_size_list_array():
     result = vx_array.to_arrow_array()
 
     assert pa.types.is_fixed_size_list(result.type)
-    assert result.type.list_size == 2  # pyright: ignore[reportAny]
+    assert result.type.list_size == 2
     # Handle nullable values - PyArrow scalars have as_py() method
     assert [x.as_py() for x in result] == [[10, 20], None, [30, 40]]
 
@@ -66,7 +66,7 @@ def test_fixed_size_list_with_string_elements():
     result = vx_array.to_arrow_array()
 
     assert pa.types.is_fixed_size_list(result.type)
-    assert result.type.list_size == 3  # pyright: ignore[reportAny]
+    assert result.type.list_size == 3
     # Convert FixedSizeListScalar to Python lists
     assert [x.as_py() for x in result] == [["a", "b", "c"], ["d", "e", "f"], ["g", "h", "i"]]
 
@@ -80,7 +80,7 @@ def test_empty_fixed_size_list_array():
     result = vx_array.to_arrow_array()
 
     assert pa.types.is_fixed_size_list(result.type)
-    assert result.type.list_size == 3  # pyright: ignore[reportAny]
+    assert result.type.list_size == 3
     assert len(result) == 0
 
 
@@ -116,8 +116,8 @@ def test_fixed_size_list_with_f64_elements():
 
     # Verify type is preserved
     assert pa.types.is_fixed_size_list(result.type)
-    assert result.type.list_size == 4  # pyright: ignore[reportAny]
-    assert result.type.value_type == pa.float64()  # pyright: ignore[reportAny]
+    assert result.type.list_size == 4
+    assert result.type.value_type == pa.float64()
 
     # Verify data is preserved
     # Use as_py() to convert PyArrow scalars to Python objects

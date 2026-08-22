@@ -1,14 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright the Vortex contributors
-# pyright: reportAny=false
-# pyright: reportMissingTypeStubs=false
-# pyright: reportMissingTypeArgument=false
-# pyright: reportPrivateUsage=false
-# pyright: reportUnannotatedClassAttribute=false
-# pyright: reportUnknownArgumentType=false
-# pyright: reportUnknownMemberType=false
-# pyright: reportUnknownParameterType=false
-# pyright: reportUnknownVariableType=false
 
 from __future__ import annotations
 
@@ -202,19 +193,19 @@ class VortexIterableDataset(hf_datasets.IterableDataset):
             super().__init__(
                 ex_iterable=ex_iterable,
                 info=info,
-                split=hf_datasets.Split(split),
+                split=hf_datasets.Split(split),  # ty: ignore[invalid-argument-type]
                 formatting=formatting,
-                shuffling=shuffling,  # pyright: ignore[reportCallIssue]
-                distributed=distributed,
+                shuffling=shuffling,  # ty: ignore[unknown-argument]
+                distributed=distributed,  # ty: ignore[invalid-argument-type]
                 token_per_repo_id=token_per_repo_id,
             )
         else:
             super().__init__(
                 ex_iterable=ex_iterable,
                 info=info,
-                split=hf_datasets.Split(split),
+                split=hf_datasets.Split(split),  # ty: ignore[invalid-argument-type]
                 formatting=formatting,
-                distributed=distributed,  # pyright: ignore[reportArgumentType]
+                distributed=distributed,  # ty: ignore[invalid-argument-type]
                 token_per_repo_id=token_per_repo_id,
             )
 
@@ -300,7 +291,7 @@ class VortexIterableDataset(hf_datasets.IterableDataset):
         limit: int | None | object = ...,
         formatting: FormattingConfig | None | object = ...,
     ) -> VortexIterableDataset:
-        new_columns = self._vortex_columns if columns is ... else _normalize_columns(columns)  # pyright: ignore[reportArgumentType]
+        new_columns = self._vortex_columns if columns is ... else _normalize_columns(columns)  # ty: ignore[invalid-argument-type]
         # Derive the new features from the current ones instead of re-reading the file schema:
         # select_columns/remove_columns only ever narrow the current selection.
         if new_columns == self._vortex_columns:
@@ -312,12 +303,12 @@ class VortexIterableDataset(hf_datasets.IterableDataset):
         return VortexIterableDataset(
             self._vortex_files,
             columns=new_columns,
-            filter=self._vortex_filter if filter is ... else filter,  # pyright: ignore[reportArgumentType]
-            limit=self._vortex_limit if limit is ... else limit,  # pyright: ignore[reportArgumentType]
+            filter=self._vortex_filter if filter is ... else filter,  # ty: ignore[invalid-argument-type]
+            limit=self._vortex_limit if limit is ... else limit,  # ty: ignore[invalid-argument-type]
             batch_size=self._vortex_batch_size,
             store=self._vortex_store,
             split=str(self._split),
-            formatting=self._formatting if formatting is ... else formatting,  # pyright: ignore[reportArgumentType]
+            formatting=self._formatting if formatting is ... else formatting,  # ty: ignore[invalid-argument-type]
             shuffling=copy.deepcopy(getattr(self, "_shuffling", None)),
             distributed=copy.deepcopy(self._distributed),
             token_per_repo_id=self._token_per_repo_id,
@@ -468,7 +459,7 @@ class _VortexExamplesIterable(_BaseExamplesIterable):
                 state["file_row_idx"] = 0
 
     @override
-    def shuffle_data_sources(self, generator) -> _VortexExamplesIterable:  # pyright: ignore[reportMissingParameterType]
+    def shuffle_data_sources(self, generator) -> _VortexExamplesIterable:
         if self.limit is not None:
             # A pushed-down limit (take()) must keep selecting the same rows, so the file order
             # cannot be permuted — mirroring TakeExamplesIterable. datasets>=5 signals this with
@@ -545,13 +536,13 @@ def _materialize_dataset(
     return hf_datasets.Dataset.from_generator(
         _generate_rows,
         features=features,
-        cache_dir=cache_dir,  # pyright: ignore[reportArgumentType]
+        cache_dir=cache_dir,  # ty: ignore[invalid-argument-type]
         keep_in_memory=keep_in_memory,
         gen_kwargs=gen_kwargs,
         # A global row limit cannot be divided across processes without overshooting, so force
         # single-process generation whenever a limit is set.
         num_proc=None if limit is not None else num_proc,
-        split=hf_datasets.Split(split),
+        split=hf_datasets.Split(split),  # ty: ignore[invalid-argument-type]
     )
 
 

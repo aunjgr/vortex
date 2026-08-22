@@ -8,7 +8,7 @@ from .dtype import DType
 
 ScalarPyType: TypeAlias = None | int | float | str | Decimal | bytes | list[ScalarPyType] | dict[str, ScalarPyType]
 
-def scalar(value: Any, *, dtype: DType | None = None) -> Scalar: ...  # pyright: ignore[reportAny, reportExplicitAny]
+def scalar(value: Any, *, dtype: DType | None = None) -> Scalar: ...
 
 class Scalar:
     @property

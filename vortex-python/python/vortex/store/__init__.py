@@ -4,7 +4,7 @@
 from collections.abc import Callable
 from typing import TypeAlias, Unpack, overload
 
-from .._lib import store as _store  # pyright: ignore[reportMissingModuleSource]
+from .._lib import store as _store
 from ._aws import S3Config, S3Credential, S3CredentialProvider, S3Store
 from ._azure import (
     AzureAccessKey,
@@ -127,13 +127,13 @@ def from_url(  # type: ignore[misc] # docstring in pyi file
         kwargs: per-store configuration passed down to store-specific builders.
 
     """
-    return _store.from_url(  # pyright: ignore[reportCallIssue, reportUnknownVariableType]
+    return _store.from_url(  # ty: ignore[no-matching-overload]
         url,
-        config=config,  # pyright: ignore[reportArgumentType]
+        config=config,
         client_options=client_options,
         retry_config=retry_config,
-        credential_provider=credential_provider,  # pyright: ignore[reportArgumentType]
-        **kwargs,  # pyright: ignore[reportArgumentType]
+        credential_provider=credential_provider,
+        **kwargs,
     )
 
 

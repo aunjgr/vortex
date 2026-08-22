@@ -85,13 +85,13 @@ jobs:
         run: uvx ruff format --check .
       - name: Python Lint - Ruff
         run: uvx ruff check .
-      # PyRight needs the project for type information, so use uv run
-      - name: Python Lint - PyRight
+      # ty needs the project for type information, so use uv run
+      - name: Python Lint - ty
         env:
           MATURIN_PEP517_ARGS: "--profile ci"
         run: |
           uv sync --all-packages
-          uv run basedpyright vortex-python
+          uv run ty check vortex-python
 
   python-test:
     name: "Python (test)"

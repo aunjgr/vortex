@@ -25,14 +25,14 @@ def record(x: int, columns: list[str] | set[str] | None = None) -> dict[str, int
 
 
 @pytest.fixture(scope="session")
-def ds(tmpdir_factory) -> vx.dataset.VortexDataset:  # pyright: ignore[reportUnknownParameterType, reportMissingParameterType]
-    fname = tmpdir_factory.mktemp("data") / "foo.vortex"  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+def ds(tmpdir_factory) -> vx.dataset.VortexDataset:
+    fname = tmpdir_factory.mktemp("data") / "foo.vortex"
 
-    assert not os.path.exists(fname)  # pyright: ignore[reportUnknownArgumentType]
+    assert not os.path.exists(fname)
 
     a = pa.array([record(x) for x in range(1_000_000)])
-    vx.io.write(vx.array(a), str(fname))  # pyright: ignore[reportUnknownArgumentType]
-    return vx.dataset.VortexDataset.from_path(str(fname))  # pyright: ignore[reportUnknownArgumentType]
+    vx.io.write(vx.array(a), str(fname))
+    return vx.dataset.VortexDataset.from_path(str(fname))
 
 
 def test_schema(ds: pd.Dataset):
@@ -87,12 +87,12 @@ def test_use_threads_configures_worker_pool(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(vx_dataset, "_worker_threads", fake_worker_threads)
     monkeypatch.setattr(vx_dataset, "_set_worker_threads", fake_set_worker_threads)
 
-    with vx_dataset._temporary_worker_threads(True):  # pyright: ignore[reportPrivateUsage]
+    with vx_dataset._temporary_worker_threads(True):
         assert current_workers == 11
 
     assert current_workers == 3
 
-    with vx_dataset._temporary_worker_threads(False):  # pyright: ignore[reportPrivateUsage]
+    with vx_dataset._temporary_worker_threads(False):
         assert current_workers == 0
 
     assert current_workers == 3
@@ -107,7 +107,7 @@ def test_use_threads_configures_worker_pool(monkeypatch: pytest.MonkeyPatch):
         ],
     )
 
-    batches = list(vx_dataset._read_batches_with_temporary_worker_threads(reader, True))  # pyright: ignore[reportPrivateUsage]
+    batches = list(vx_dataset._read_batches_with_temporary_worker_threads(reader, True))
 
     assert [batch.to_pylist() for batch in batches] == [[{"x": 1}], [{"x": 2}]]
     assert current_workers == 3
@@ -144,7 +144,7 @@ def test_to_table(ds: pd.Dataset):
 
 
 def test_to_record_batch_reader_with_polars(ds: pd.Dataset):
-    pldf = polars.scan_pyarrow_dataset(ds).collect()  # pyright: ignore[reportUnknownMemberType]
+    pldf = polars.scan_pyarrow_dataset(ds).collect()
     assert len(pldf) == 1_000_000
     assert pldf.schema["index"] == polars.Int64
     assert pldf.schema["string"] == polars.Utf8
@@ -192,7 +192,7 @@ def test_filter_with_nested_null_dtype(tmp_path: Path):
 
 
 def test_duckdb(ds: vx.dataset.VortexDataset):
-    assert ds  # pyright cannot determine that ds is used by duckdb.execute
+    assert ds  # the type checker cannot determine that ds is used by duckdb.execute
 
     tbl = duckdb.execute("select * from ds where string >= '950000' and float < 975.0").arrow().read_all()
     assert len(tbl) == 6176

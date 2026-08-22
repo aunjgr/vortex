@@ -4,7 +4,7 @@
 import duckdb
 import pyarrow as pa
 import pytest
-from pytest_benchmark.fixture import BenchmarkFixture  # pyright: ignore[reportMissingTypeStubs]
+from pytest_benchmark.fixture import BenchmarkFixture
 
 import vortex as vx
 

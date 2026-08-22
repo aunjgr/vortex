@@ -17,7 +17,7 @@ packages = ["dummy"] # Required for workspace project
 # Shared dev tooling. Member-specific dev deps live in each member's pyproject.toml.
 # `uv sync --all-packages` picks up dev groups from all workspace members.
 dev = [
-    "basedpyright>=1.31",
+    "ty>=0.0.73",
     "ipython>=8.26.0",
     "pip>=23.3.2",
     "pytest>=7.4.0",
@@ -73,5 +73,16 @@ log_cli = true
 log_cli_level = "INFO"
 xfail_strict = true
 
-[tool.basedpyright]
-exclude = ["vortex-python/python/vortex/_lib/store/**.pyi"]
+[tool.ty.environment]
+# First-party source roots so `vortex` and `vortex_cuda` resolve without an
+# editable install of the Rust extensions.
+root = [
+    "vortex-python/python",
+    "vortex-python",
+    "vortex-python-cuda/python",
+    "vortex-python-cuda",
+]
+
+[tool.ty.src]
+# Vendored obstore stubs are not checked.
+exclude = ["vortex-python/python/vortex/_lib/store/**/*.pyi"]

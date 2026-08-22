@@ -26,14 +26,14 @@ def vxscan(vxfile: vx.VortexFile) -> vx.RepeatedScan:
 
 
 @pytest.fixture(scope="session")
-def vxfile(tmpdir_factory) -> vx.VortexFile:  # pyright: ignore[reportUnknownParameterType, reportMissingParameterType]
-    fname = tmpdir_factory.mktemp("data") / "foo.vortex"  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+def vxfile(tmpdir_factory) -> vx.VortexFile:
+    fname = tmpdir_factory.mktemp("data") / "foo.vortex"
 
-    if not os.path.exists(fname):  # pyright: ignore[reportUnknownArgumentType]
+    if not os.path.exists(fname):
         a = pa.array([record(x) for x in range(1_000)])
         arr = vx.compress(vx.array(a))
-        vx.io.write(arr, str(fname))  # pyright: ignore[reportUnknownArgumentType]
-    return vx.open(str(fname))  # pyright: ignore[reportUnknownArgumentType]
+        vx.io.write(arr, str(fname))
+    return vx.open(str(fname))
 
 
 def test_execute(vxscan: RepeatedScan):

@@ -18,11 +18,11 @@ import vortex as vx
 
 
 @pytest.fixture(params=[10, 100])
-def vortex_array(request):  # pyright: ignore[reportUnknownParameterType, reportMissingParameterType]
+def vortex_array(request):
     rows: list[dict[str, list[int | None]]] = []
     for _ in range(1_000):
         r: dict[str, list[int | None]] = {}
-        for col in range(request.param):  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+        for col in range(request.param):
             # Create large arrays of length 100 for each column.
             r[f"col{col}"] = [1, 2, None, 4] * 25
         rows.append(r)
@@ -30,11 +30,11 @@ def vortex_array(request):  # pyright: ignore[reportUnknownParameterType, report
 
 
 @pytest.fixture(params=[10, 100])
-def arrow_array(request):  # pyright: ignore[reportUnknownParameterType, reportMissingParameterType]
+def arrow_array(request):
     rows: list[dict[str, list[int | None]]] = []
     for _ in range(1_000):
         r: dict[str, list[int | None]] = {}
-        for col in range(request.param):  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+        for col in range(request.param):
             # Create large arrays of length 100 for each column.
             r[f"col{col}"] = [1, 2, None, 4] * 25
         rows.append(r)
@@ -57,6 +57,6 @@ def test_compress_parquet(
     def compress():
         # write to bytes in memory.
         bout = io.BytesIO()
-        pq.write_table(arrow_array, bout)  # pyright: ignore[reportArgumentType, reportUnknownMemberType]
+        pq.write_table(arrow_array, bout)  # ty: ignore[invalid-argument-type]
 
     benchmark(compress)

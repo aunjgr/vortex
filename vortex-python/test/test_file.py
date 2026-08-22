@@ -20,14 +20,14 @@ def record(x: int, columns: list[str] | set[str] | None = None) -> dict[str, int
 
 
 @pytest.fixture(scope="session")
-def vxf(tmpdir_factory) -> vx.VortexFile:  # pyright: ignore[reportUnknownParameterType, reportMissingParameterType]
-    fname = tmpdir_factory.mktemp("data") / "foo.vortex"  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+def vxf(tmpdir_factory) -> vx.VortexFile:
+    fname = tmpdir_factory.mktemp("data") / "foo.vortex"
 
-    if not os.path.exists(fname):  # pyright: ignore[reportUnknownArgumentType]
+    if not os.path.exists(fname):
         a = pa.array([record(x) for x in range(1_000_000)])
         arr = vx.compress(vx.array(a))
-        vx.io.write(arr, str(fname))  # pyright: ignore[reportUnknownArgumentType]
-    return vx.open(str(fname), without_segment_cache=True)  # pyright: ignore[reportUnknownArgumentType]
+        vx.io.write(arr, str(fname))
+    return vx.open(str(fname), without_segment_cache=True)
 
 
 def test_dtype(vxf: VortexFile):
@@ -72,7 +72,7 @@ def test_to_arrow_offset_string_schema(vxf: VortexFile):
     )
 
 
-def test_empty_file(tmpdir_factory):  # pyright: ignore[reportUnknownParameterType, reportMissingParameterType]
+def test_empty_file(tmpdir_factory):
     # test for writing empty files with null columns
     # create an empty table with schema `empty: null`
     table = pa.Table.from_pydict({"empty": []})
@@ -84,21 +84,21 @@ def test_empty_file(tmpdir_factory):  # pyright: ignore[reportUnknownParameterTy
     assert repr(empty.dtype) == 'struct({"empty": null()}, nullable=False)'
 
     # writing file should succeed
-    empty_file = tmpdir_factory.mktemp("data") / "empty.vortex"  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-    vx.io.write(empty, str(empty_file))  # pyright: ignore[reportUnknownArgumentType]
+    empty_file = tmpdir_factory.mktemp("data") / "empty.vortex"
+    vx.io.write(empty, str(empty_file))
 
 
-def test_stream_pyarrow(tmpdir_factory):  # pyright: ignore[reportUnknownParameterType, reportMissingParameterType]
+def test_stream_pyarrow(tmpdir_factory):
     import pyarrow.parquet as pq
 
-    data_dir = tmpdir_factory.mktemp("data")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    data_dir = tmpdir_factory.mktemp("data")
     table = pa.Table.from_pydict(
         {
             "names": ["Alice", "Bob", "Carol"],
             "ages": [21, 22, 23],
         }
     )
-    pq.write_table(table, str(data_dir / "names.parquet"))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+    pq.write_table(table, str(data_dir / "names.parquet"))
 
-    df = pq.read_table(str(data_dir / "names.parquet"))  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
-    vx.io.write(df, str(data_dir / "names.vortex"))  # pyright: ignore[reportUnknownArgumentType]
+    df = pq.read_table(str(data_dir / "names.parquet"))
+    vx.io.write(df, str(data_dir / "names.vortex"))

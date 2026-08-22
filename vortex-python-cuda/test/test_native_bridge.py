@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright the Vortex contributors
-# pyright: reportPrivateUsage=false
 
 import gc
 
@@ -66,7 +65,7 @@ def test_metadata_bridge_struct_with_children():
 
     arrow_table = pa.table({"a": [1, 2, 3], "b": [4.0, 5.0, 6.0]})
     struct_array = vortex.Array.from_arrow(
-        pa.StructArray.from_arrays(  # pyright: ignore[reportUnknownMemberType]
+        pa.StructArray.from_arrays(
             [arrow_table.column("a").combine_chunks(), arrow_table.column("b").combine_chunks()],
             names=["a", "b"],
         )
@@ -128,7 +127,7 @@ def test_arrow_device_export_struct_array():
 
     arrow_table = pa.table({"a": [1, 2, 3], "b": [4.0, 5.0, 6.0]})
     struct_array = vortex.Array.from_arrow(
-        pa.StructArray.from_arrays(  # pyright: ignore[reportUnknownMemberType]
+        pa.StructArray.from_arrays(
             [arrow_table.column("a").combine_chunks(), arrow_table.column("b").combine_chunks()],
             names=["a", "b"],
         )
