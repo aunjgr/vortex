@@ -56,7 +56,7 @@ impl Scheme for ZstdScheme {
             .into_owned()
             .compact_buffers(exec_ctx)?;
         Ok(
-            vortex_zstd::Zstd::from_var_bin_view_without_dict(&compacted, 3, 8192, exec_ctx)?
+            vortex_zstd::Zstd::from_var_bin_view_without_dict(&compacted, 3, 65536, exec_ctx)?
                 .into_array(),
         )
     }

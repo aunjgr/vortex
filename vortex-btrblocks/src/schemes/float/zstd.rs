@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: Copyright the Vortex contributors
 
-//! Zstd string compression without dictionaries (nvCOMP compatible).
+//! Zstd floating-point compression.
 
 use vortex_array::ArrayId;
 use vortex_array::ArrayRef;
@@ -18,17 +18,17 @@ use crate::CascadingCompressor;
 use crate::CompressorContext;
 use crate::Scheme;
 
-/// Zstd compression without dictionaries (nvCOMP compatible).
+/// Zstd compression for floating-point arrays.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct ZstdScheme;
 
 impl Scheme for ZstdScheme {
     fn scheme_name(&self) -> &'static str {
-        "vortex.string.zstd"
+        "vortex.float.zstd"
     }
 
     fn matches(&self, canonical: &Canonical) -> bool {
-        canonical.dtype().is_utf8()
+        canonical.dtype().is_float()
     }
 
     fn produced_encodings(&self) -> Vec<ArrayId> {
@@ -51,13 +51,7 @@ impl Scheme for ZstdScheme {
         _compress_ctx: CompressorContext,
         exec_ctx: &mut ExecutionCtx,
     ) -> VortexResult<ArrayRef> {
-        let compacted = data
-            .array_as_varbinview()
-            .into_owned()
-            .compact_buffers(exec_ctx)?;
-        Ok(
-            vortex_zstd::Zstd::from_var_bin_view_without_dict(&compacted, 3, 65536, exec_ctx)?
-                .into_array(),
-        )
+        let primitive = data.array_as_primitive().into_owned();
+        Ok(vortex_zstd::Zstd::from_primitive(&primitive, 3, 65536, exec_ctx)?.into_array())
     }
 }

@@ -15,6 +15,8 @@ mod zigzag;
 
 #[cfg(feature = "pco")]
 mod pco;
+#[cfg(feature = "zstd")]
+mod zstd;
 
 pub use bitpacking::BitPackingScheme;
 #[cfg(feature = "unstable_encodings")]
@@ -33,6 +35,8 @@ pub use sparse::SparseScheme;
 pub use vortex_compressor::builtins::IntDictScheme;
 pub use vortex_compressor::stats::IntegerStats;
 pub use zigzag::ZigZagScheme;
+#[cfg(feature = "zstd")]
+pub use zstd::ZstdScheme;
 
 /// Threshold for the average run length in an array before we consider run-length encoding.
 pub(crate) const RUN_LENGTH_THRESHOLD: u32 = 4;

@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: Copyright the Vortex contributors
 
+use std::mem::size_of;
+
 use ::alp::ENCODE_CHUNK_SIZE;
 use itertools::Itertools;
+use num_traits::CheckedSub;
+use num_traits::ToPrimitive;
 use vortex_array::ArrayRef;
 use vortex_array::ArrayView;
 use vortex_array::ExecutionCtx;
@@ -23,6 +27,93 @@ use crate::ALP;
 use crate::Exponents;
 use crate::alp::ALPArray;
 use crate::alp::ALPFloat;
+
+// The upstream selector assumes every patch index costs two bytes and samples only 32 values.
+// Score against the original array length so exponent selection reflects the index type that
+// Vortex can materialize after encoding.
+const EXPONENT_SAMPLE_SIZE: usize = 4096;
+
+fn patch_index_nbytes(array_len: usize) -> usize {
+    let max_index = array_len.saturating_sub(1);
+    if max_index <= u16::MAX as usize {
+        size_of::<u16>()
+    } else if max_index <= u32::MAX as usize {
+        size_of::<u32>()
+    } else {
+        size_of::<u64>()
+    }
+}
+
+fn update_bounds<I: Ord + Copy>(bounds: &mut Option<(I, I)>, value: I) {
+    *bounds = Some(bounds.map_or((value, value), |(min, max)| {
+        (min.min(value), max.max(value))
+    }));
+}
+
+fn estimate_encoded_size<T: ALPFloat>(
+    values: &[T],
+    array_len: usize,
+    exponents: Exponents,
+) -> usize {
+    let mut kept = None;
+    let mut all = None;
+    let mut patch_count = 0usize;
+
+    for &value in values {
+        let encoded = T::encode_single_unchecked(value, exponents);
+        update_bounds(&mut all, encoded);
+        if T::decode_single(encoded, exponents).is_eq(value) {
+            update_bounds(&mut kept, encoded);
+        } else {
+            patch_count += 1;
+        }
+    }
+
+    let range = if patch_count == values.len() {
+        all
+    } else {
+        kept
+    };
+    let bits_per_encoded = range
+        .and_then(|(min, max)| max.checked_sub(&min))
+        .and_then(|range_size| range_size.to_u64())
+        .and_then(|range_size| {
+            range_size
+                .checked_ilog2()
+                .map(|bits| (bits + 1) as usize)
+                .or(Some(0))
+        })
+        .unwrap_or(size_of::<T::ALPInt>() * 8);
+
+    let encoded_bytes = (values.len() * bits_per_encoded).div_ceil(8);
+    let patch_bytes = patch_count * (size_of::<T>() + patch_index_nbytes(array_len));
+    encoded_bytes + patch_bytes
+}
+
+fn find_best_exponents<T: ALPFloat>(values: &[T]) -> Exponents {
+    let sample = (values.len() > EXPONENT_SAMPLE_SIZE).then(|| {
+        values
+            .iter()
+            .step_by(values.len() / EXPONENT_SAMPLE_SIZE)
+            .copied()
+            .collect_vec()
+    });
+    let sample = sample.as_deref().unwrap_or(values);
+    let mut best = Exponents { e: 0, f: 0 };
+    let mut best_nbytes = usize::MAX;
+
+    for e in (0..T::MAX_EXPONENT).rev() {
+        for f in 0..e {
+            let candidate = Exponents { e, f };
+            let nbytes = estimate_encoded_size(sample, values.len(), candidate);
+            if nbytes < best_nbytes || (nbytes == best_nbytes && e - f < best.e - best.f) {
+                best = candidate;
+                best_nbytes = nbytes;
+            }
+        }
+    }
+    best
+}
 
 #[macro_export]
 macro_rules! match_each_alp_float_ptype {
@@ -73,6 +164,7 @@ where
     T::ALPInt: NativePType,
 {
     let values_slice = values.as_slice::<T>();
+    let exponents = exponents.unwrap_or_else(|| find_best_exponents(values_slice));
 
     // Encode straight into a Vortex buffer, so that the encoded array owns its values rather than
     // adopting a `Vec` allocated by the encoder.
@@ -86,7 +178,7 @@ where
     let mut chunk_offsets = Vec::with_capacity(values_slice.len().div_ceil(ENCODE_CHUNK_SIZE));
     let exponents = ::alp::encode_into(
         values_slice,
-        exponents,
+        Some(exponents),
         &mut encoded.spare_capacity_mut()[..values_slice.len()],
         &mut exceptional_positions,
         &mut exceptional_values,
@@ -174,6 +266,19 @@ mod tests {
         crate::initialize(&session);
         session
     });
+
+    #[test]
+    fn patch_index_width_tracks_array_length() {
+        assert_eq!(patch_index_nbytes(1 << 16), 2);
+        assert_eq!(patch_index_nbytes((1 << 16) + 1), 4);
+
+        let values = [1.0f64 / 3.0];
+        let exponents = Exponents { e: 1, f: 0 };
+        assert_eq!(
+            estimate_encoded_size(&values, (1 << 16) + 1, exponents),
+            estimate_encoded_size(&values, 1 << 16, exponents) + 2
+        );
+    }
 
     #[test]
     fn test_compress() {

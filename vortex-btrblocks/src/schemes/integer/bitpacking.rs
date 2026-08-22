@@ -25,7 +25,9 @@ use crate::ArrayAndStats;
 use crate::CascadingCompressor;
 use crate::CompressorContext;
 use crate::Scheme;
+use crate::SchemeExt;
 use crate::compress_patches;
+use crate::schemes::patches::compress_patched_children;
 
 /// BitPacking encoding for non-negative integers.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -46,6 +48,11 @@ impl Scheme for BitPackingScheme {
             encodings.push(Patched.id());
         }
         encodings
+    }
+
+    /// Children: packed=0, lane_offsets=1, patch_indices=2, patch_values=3.
+    fn num_children(&self) -> usize {
+        4
     }
 
     fn expected_compression_ratio(
@@ -105,9 +112,17 @@ impl Scheme for BitPackingScheme {
 
             match patches {
                 None => array,
-                Some(p) => Patched::from_array_and_patches(array, &p, exec_ctx)?
-                    .with_stats_set(packed_stats)
-                    .into_array(),
+                Some(p) => {
+                    let patched = Patched::from_array_and_patches(array, &p, exec_ctx)?
+                        .with_stats_set(packed_stats);
+                    return compress_patched_children(
+                        _compressor,
+                        patched,
+                        &_compress_ctx,
+                        self.id(),
+                        exec_ctx,
+                    );
+                }
             }
         } else {
             // Compress patches and place back into BitPackedArray.

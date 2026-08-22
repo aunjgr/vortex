@@ -150,6 +150,10 @@ impl BtrBlocksCompressorBuilder {
             .with_new_scheme(&integer::PcoScheme)
             .with_new_scheme(&float::PcoScheme);
 
+        let builder = builder
+            .with_new_scheme(&integer::ZstdScheme)
+            .with_new_scheme(&float::ZstdScheme);
+
         builder
     }
 

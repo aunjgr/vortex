@@ -10,6 +10,8 @@ mod sparse;
 
 #[cfg(feature = "pco")]
 mod pco;
+#[cfg(feature = "zstd")]
+mod zstd;
 
 pub use alp::ALPScheme;
 pub use alprd::ALPRDScheme;
@@ -20,6 +22,8 @@ pub use sparse::NullDominatedSparseScheme;
 // Re-export builtin schemes from vortex-compressor.
 pub use vortex_compressor::builtins::FloatDictScheme;
 pub use vortex_compressor::stats::FloatStats;
+#[cfg(feature = "zstd")]
+pub use zstd::ZstdScheme;
 
 #[cfg(test)]
 mod scheme_selection_tests;
