@@ -16,6 +16,7 @@ pub use array::*;
 
 pub(crate) mod compute;
 mod execute;
+pub use execute::decode_dictionary;
 
 mod take;
 pub use take::*;
