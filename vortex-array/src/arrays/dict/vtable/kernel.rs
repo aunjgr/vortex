@@ -13,6 +13,8 @@ use crate::scalar_fn::fns::binary::Binary;
 use crate::scalar_fn::fns::binary::CompareExecuteAdaptor;
 use crate::scalar_fn::fns::fill_null::FillNull;
 use crate::scalar_fn::fns::fill_null::FillNullExecuteAdaptor;
+use crate::scalar_fn::fns::like::Like;
+use crate::scalar_fn::fns::like::LikeExecuteAdaptor;
 
 pub(crate) fn initialize(session: &VortexSession) {
     let kernels = session.kernels();
@@ -20,4 +22,5 @@ pub(crate) fn initialize(session: &VortexSession) {
     kernels.register_execute_parent_kernel(Dict.id(), Chunked, TakeExecuteAdaptor(Chunked));
     kernels.register_execute_parent_kernel(Dict.id(), Dict, TakeExecuteAdaptor(Dict));
     kernels.register_execute_parent_kernel(FillNull.id(), Dict, FillNullExecuteAdaptor(Dict));
+    kernels.register_execute_parent_kernel(Like.id(), Dict, LikeExecuteAdaptor(Dict));
 }

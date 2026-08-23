@@ -3,6 +3,7 @@
 
 use vortex_error::VortexResult;
 
+use super::should_execute_dictionary_values;
 use crate::ArrayEq;
 use crate::ArrayRef;
 use crate::EqMode;
@@ -30,7 +31,6 @@ use crate::optimizer::rules::ArrayParentReduceRule;
 use crate::optimizer::rules::ParentRuleSet;
 use crate::scalar_fn::fns::cast::Cast;
 use crate::scalar_fn::fns::cast::CastReduceAdaptor;
-use crate::scalar_fn::fns::like::LikeReduceAdaptor;
 use crate::scalar_fn::fns::mask::MaskReduceAdaptor;
 use crate::scalar_fn::fns::pack::Pack;
 use crate::validity::Validity;
@@ -39,7 +39,6 @@ pub(crate) const PARENT_RULES: ParentRuleSet<Dict> = ParentRuleSet::new(&[
     ParentRuleSet::lift(&FilterReduceAdaptor(Dict)),
     ParentRuleSet::lift(&CastReduceAdaptor(Dict)),
     ParentRuleSet::lift(&MaskReduceAdaptor(Dict)),
-    ParentRuleSet::lift(&LikeReduceAdaptor(Dict)),
     ParentRuleSet::lift(&DictionaryChunkedValuesPullUpRule),
     ParentRuleSet::lift(&DictionaryScalarFnValuesPushDownRule),
     ParentRuleSet::lift(&DictionaryScalarFnCodesPullUpRule),
@@ -124,7 +123,7 @@ impl ArrayParentReduceRule<Dict> for DictionaryScalarFnValuesPushDownRule {
 
         // If the dictionary has less codes than values don't push down this might
         // happen if the dictionary is sliced.
-        if array.values().len() > array.codes().len() {
+        if !should_execute_dictionary_values(array.values().len(), array.codes().len()) {
             return Ok(None);
         }
 

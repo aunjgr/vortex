@@ -25,6 +25,16 @@ use crate::array::ArrayView;
 use crate::arrays::dict::DictArraySlotsExt;
 use crate::arrays::filter::FilterReduce;
 
+/// Upper bound for applying one computation to dictionary values before mapping the codes.
+///
+/// This follows DuckDB's execution policy: large dictionaries are decoded through the ordinary
+/// vector path rather than paying a potentially query-sized speculative computation.
+const MAX_EXECUTION_DICTIONARY_VALUES: usize = 20_000;
+
+fn should_execute_dictionary_values(values: usize, codes: usize) -> bool {
+    values < MAX_EXECUTION_DICTIONARY_VALUES && values <= codes
+}
+
 impl TakeExecute for Dict {
     fn take(
         array: ArrayView<'_, Dict>,
@@ -339,6 +349,8 @@ mod tests {
     use vortex_buffer::buffer;
     use vortex_session::VortexSession;
 
+    use super::MAX_EXECUTION_DICTIONARY_VALUES;
+    use super::should_execute_dictionary_values;
     use crate::IntoArray;
     use crate::VortexSessionExecute;
     use crate::arrays::DictArray;
@@ -350,6 +362,16 @@ mod tests {
     use crate::dtype::Nullability;
 
     static SESSION: LazyLock<VortexSession> = LazyLock::new(crate::array_session);
+
+    #[test]
+    fn dictionary_execution_policy_bounds_speculative_values() {
+        assert!(should_execute_dictionary_values(128, 8_192));
+        assert!(!should_execute_dictionary_values(8_193, 8_192));
+        assert!(!should_execute_dictionary_values(
+            MAX_EXECUTION_DICTIONARY_VALUES,
+            MAX_EXECUTION_DICTIONARY_VALUES
+        ));
+    }
 
     #[rstest]
     // Primitive arrays

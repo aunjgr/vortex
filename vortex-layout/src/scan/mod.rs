@@ -10,6 +10,9 @@ pub mod scan_builder;
 pub mod split_by;
 mod splits;
 mod tasks;
+
+pub use repeated_scan::ScanTask;
+pub use repeated_scan::ScanTasks;
 #[cfg(test)]
 mod test;
 

@@ -4,48 +4,49 @@
 use vortex_error::VortexResult;
 
 use super::Dict;
-use super::DictArray;
+use super::should_execute_dictionary_values;
 use crate::ArrayRef;
+use crate::CanonicalView;
+use crate::ExecutionCtx;
 use crate::IntoArray;
 use crate::array::ArrayView;
+use crate::arrays::BoolArray;
 use crate::arrays::ConstantArray;
-use crate::arrays::dict::DictArrayExt;
+use crate::arrays::PrimitiveArray;
 use crate::arrays::dict::DictArraySlotsExt;
-use crate::optimizer::ArrayOptimizer;
+use crate::arrays::dict::execute::take_canonical;
 use crate::scalar_fn::fns::like::Like;
+use crate::scalar_fn::fns::like::LikeKernel;
 use crate::scalar_fn::fns::like::LikeOptions;
-use crate::scalar_fn::fns::like::LikeReduce;
 
-impl LikeReduce for Dict {
+impl LikeKernel for Dict {
     fn like(
         array: ArrayView<'_, Dict>,
         pattern: &ArrayRef,
         options: LikeOptions,
+        ctx: &mut ExecutionCtx,
     ) -> VortexResult<Option<ArrayRef>> {
-        // If we have more values than codes, it is faster to canonicalize first.
-        if array.values().len() > array.codes().len() {
+        if !should_execute_dictionary_values(array.values().len(), array.codes().len()) {
             return Ok(None);
         }
-        if let Some(pattern) = pattern.as_constant() {
-            let pattern = ConstantArray::new(pattern, array.values().len()).into_array();
+        let Some(pattern) = pattern.as_constant() else {
+            return Ok(None);
+        };
 
-            let values = Like::try_new(array.values().clone(), pattern, options)?
-                .into_array()
-                .optimize()?;
+        let pattern = ConstantArray::new(pattern, array.values().len()).into_array();
+        let matched_values = Like::try_new(array.values().clone(), pattern, options)?
+            .into_array()
+            .execute::<BoolArray>(ctx)?;
+        let codes = array.codes().clone().execute::<PrimitiveArray>(ctx)?;
 
-            // SAFETY: LIKE preserves the len of the values, so codes are still pointing at
-            //  valid positions.
-            // Preserve all_values_referenced since codes are unchanged.
-            unsafe {
-                Ok(Some(
-                    DictArray::new_unchecked(array.codes().clone(), values)
-                        .set_all_values_referenced(array.has_all_values_referenced())
-                        .into_array(),
-                ))
-            }
-        } else {
-            Ok(None)
-        }
+        Ok(Some(
+            take_canonical(
+                CanonicalView::Bool(matched_values.as_view()),
+                codes.as_view(),
+                ctx,
+            )?
+            .into_array(),
+        ))
     }
 }
 
@@ -57,17 +58,17 @@ mod tests {
     use crate::IntoArray;
     use crate::VortexSessionExecute;
     use crate::array_session;
+    use crate::arrays::Bool;
     use crate::arrays::BoolArray;
+    use crate::arrays::ConstantArray;
     use crate::arrays::DictArray;
     use crate::arrays::VarBinArray;
-    use crate::arrays::dict::compute::like::ConstantArray;
     use crate::assert_arrays_eq;
-    use crate::optimizer::ArrayOptimizer;
     use crate::scalar_fn::fns::like::Like;
     use crate::scalar_fn::fns::like::LikeOptions;
 
     #[test]
-    fn like_reduce_dict() -> VortexResult<()> {
+    fn like_execute_dict_returns_canonical_bool() -> VortexResult<()> {
         let mut ctx = array_session().create_execution_ctx();
         let dict = DictArray::try_new(
             buffer![0u8, 1, 0, 2].into_array(),
@@ -78,8 +79,10 @@ mod tests {
         let pattern = ConstantArray::new("hello%", 4).into_array();
         let result = Like::try_new(dict, pattern, LikeOptions::default())?
             .into_array()
-            .optimize()?;
+            .execute::<BoolArray>(&mut ctx)?
+            .into_array();
 
+        assert!(result.is::<Bool>());
         assert_arrays_eq!(
             result,
             BoolArray::from_iter([true, false, true, false]),
