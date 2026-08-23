@@ -525,6 +525,7 @@ mod test {
     use vortex_array::expr::is_not_null;
     use vortex_array::expr::lit;
     use vortex_array::expr::root;
+    use vortex_error::VortexExpect;
     use vortex_error::VortexResult;
     use vortex_error::vortex_err;
     use vortex_io::runtime::BlockingRuntime;
@@ -719,15 +720,24 @@ mod test {
         dtype: DType,
         row_count: u64,
         register_splits_calls: Arc<AtomicUsize>,
+        projection_calls: Arc<AtomicUsize>,
     }
 
     impl SplittingLayoutReader {
         fn new(register_splits_calls: Arc<AtomicUsize>) -> Self {
+            Self::with_projection_calls(register_splits_calls, Arc::new(AtomicUsize::new(0)))
+        }
+
+        fn with_projection_calls(
+            register_splits_calls: Arc<AtomicUsize>,
+            projection_calls: Arc<AtomicUsize>,
+        ) -> Self {
             Self {
                 name: Arc::from("splitting"),
                 dtype: DType::Primitive(PType::I32, Nullability::NonNullable),
                 row_count: 4,
                 register_splits_calls,
+                projection_calls,
             }
         }
     }
@@ -782,6 +792,7 @@ mod test {
             _expr: &BoundExpression,
             _mask: MaskFuture,
         ) -> VortexResult<ArrayFuture> {
+            self.projection_calls.fetch_add(1, Ordering::Relaxed);
             let start = usize::try_from(row_range.start)
                 .map_err(|_| vortex_err!("row_range.start must fit in usize"))?;
             let end = usize::try_from(row_range.end)
@@ -798,6 +809,32 @@ mod test {
         fn as_any(&self) -> &dyn std::any::Any {
             self
         }
+    }
+
+    #[test]
+    fn repeated_scan_tasks_register_projection_on_demand() -> VortexResult<()> {
+        let register_calls = Arc::new(AtomicUsize::new(0));
+        let projection_calls = Arc::new(AtomicUsize::new(0));
+        let reader = Arc::new(SplittingLayoutReader::with_projection_calls(
+            Arc::clone(&register_calls),
+            Arc::clone(&projection_calls),
+        ));
+
+        let scan = ScanBuilder::new(SCAN_SESSION.clone(), reader)
+            .with_natural_splits(vec![0u64, 1, 2, 3, 4].into())
+            .prepare()?;
+        let mut tasks = scan.tasks(None)?;
+
+        assert_eq!(register_calls.load(Ordering::Relaxed), 0);
+        assert_eq!(projection_calls.load(Ordering::Relaxed), 0);
+
+        let first = tasks.next().transpose()?.vortex_expect("first task");
+        assert_eq!(first.row_range(), &(0..1));
+        assert_eq!(projection_calls.load(Ordering::Relaxed), 1);
+
+        drop(tasks);
+        assert_eq!(projection_calls.load(Ordering::Relaxed), 1);
+        Ok(())
     }
 
     #[test]
