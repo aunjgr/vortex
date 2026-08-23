@@ -14,8 +14,11 @@ use vortex_array::ArrayRef;
 use vortex_array::IntoArray;
 use vortex_array::MaskFuture;
 use vortex_array::VortexSessionExecute;
+use vortex_array::arrays::Bool;
 use vortex_array::arrays::DictArray;
 use vortex_array::arrays::SharedArray;
+use vortex_array::arrays::bool::BoolArrayExt;
+use vortex_array::arrays::dict::TakeExecute;
 use vortex_array::dtype::DType;
 use vortex_array::dtype::FieldMask;
 use vortex_array::dtype::Nullability;
@@ -27,6 +30,7 @@ use vortex_array::expr::label_bound_tree;
 use vortex_array::expr::root;
 use vortex_array::expr::transform::partition_bound_annotations;
 use vortex_array::optimizer::ArrayOptimizer;
+use vortex_array::scalar_fn::fns::dynamic::DynamicExprUpdates;
 use vortex_array::scalar_fn::is_negative_cost;
 use vortex_error::VortexError;
 use vortex_error::VortexExpect;
@@ -54,6 +58,8 @@ pub struct DictReader {
     values_array: OnceLock<SharedArrayFuture>,
     /// Cache of expression evaluation results on the values array by expression
     values_evals: DashMap<ExactBoundExpr, SharedArrayFuture>,
+    /// Canonical null-as-false predicate values for safe static filters.
+    values_masks: DashMap<ExactBoundExpr, SharedArrayFuture>,
 
     values: LayoutReaderRef,
     codes: LayoutReaderRef,
@@ -94,6 +100,7 @@ impl DictReader {
             values_len,
             values_array: Default::default(),
             values_evals: Default::default(),
+            values_masks: Default::default(),
             values,
             codes,
         })
@@ -171,6 +178,60 @@ impl DictReader {
             })
             .clone()
     }
+
+    fn values_mask(&self, expr: BoundExpression) -> SharedArrayFuture {
+        let key = ExactBoundExpr(expr.clone());
+        if let Some(future) = self.values_masks.get(&key) {
+            return future.clone();
+        }
+        let session = self.session.clone();
+        self.values_masks
+            .entry(key)
+            .or_insert_with(|| {
+                self.values_array_uncanonical()
+                    .map(move |array| {
+                        let array = array?.apply_bound(&expr)?;
+                        let mut ctx = session.create_execution_ctx();
+                        Ok(array.null_as_false().execute(&mut ctx)?.into_array())
+                    })
+                    .boxed()
+                    .shared()
+            })
+            .clone()
+    }
+}
+
+fn cacheable_value_mask(expr: &BoundExpression) -> bool {
+    if !matches!(expr.dtype(), DType::Bool(_)) || DynamicExprUpdates::new(expr).is_some() {
+        return false;
+    }
+    let mut pending = vec![expr];
+    while let Some(expr) = pending.pop() {
+        if let Some(function) = expr.as_scalar() {
+            let signature = function.signature();
+            if !signature.is_infallible() || !signature.is_strict() {
+                return false;
+            }
+        }
+        pending.extend(expr.children());
+    }
+    true
+}
+
+fn take_value_mask(
+    values: &ArrayRef,
+    codes: &ArrayRef,
+    ctx: &mut vortex_array::ExecutionCtx,
+) -> VortexResult<Mask> {
+    let values = values
+        .as_opt::<Bool>()
+        .vortex_expect("cached dictionary predicate values must be canonical boolean");
+    let taken = <Bool as TakeExecute>::take(values, codes, ctx)?
+        .vortex_expect("canonical Boolean take must produce an array");
+    Ok(taken
+        .as_opt::<Bool>()
+        .vortex_expect("canonical Boolean take must remain Boolean")
+        .to_mask_fill_null_false(ctx))
 }
 
 // On expression pushdown, "inner" is packed as field with this name.
@@ -259,7 +320,12 @@ impl LayoutReader for DictReader {
         mask: MaskFuture,
     ) -> VortexResult<MaskFuture> {
         // TODO(joe): fix up expr partitioning with fallibility and strictness annotations
-        let values_eval = self.values_eval(expr.clone());
+        let direct = cacheable_value_mask(expr);
+        let values_eval = if direct {
+            self.values_mask(expr.clone())
+        } else {
+            self.values_eval(expr.clone())
+        };
 
         // We register interest on the entire codes row_range for now, there
         // is no straightforward shift into the codes domain we can do to the expression
@@ -277,7 +343,11 @@ impl LayoutReader for DictReader {
             let mask = mask.await?;
 
             let mut ctx = session.create_execution_ctx();
-            let dict_mask = values.take(codes)?.null_as_false().execute(&mut ctx)?;
+            let dict_mask = if direct {
+                take_value_mask(&values, &codes, &mut ctx)?
+            } else {
+                values.take(codes)?.null_as_false().execute(&mut ctx)?
+            };
 
             Ok(mask.bitand(&dict_mask))
         }))
@@ -362,6 +432,7 @@ mod tests {
     use vortex_array::VortexSessionExecute;
     use vortex_array::array_session;
     use vortex_array::arrays::BoolArray;
+    use vortex_array::arrays::PrimitiveArray;
     use vortex_array::arrays::StructArray;
     use vortex_array::arrays::VarBinArray;
     use vortex_array::assert_arrays_eq;
@@ -825,5 +896,36 @@ mod tests {
         let (outer, inner) = split_bound(expr.clone(), &dtype).unwrap();
         assert_eq!(outer, expr.bind(&dtype).unwrap());
         assert_eq!(inner, None);
+    }
+
+    #[test]
+    fn static_strict_predicate_is_cacheable() -> VortexResult<()> {
+        let dtype = DType::Primitive(PType::I32, Nullability::NonNullable);
+        assert!(super::cacheable_value_mask(
+            &eq(root(), lit(2_i32)).bind(&dtype)?
+        ));
+        assert!(!super::cacheable_value_mask(
+            &cast(
+                root(),
+                DType::Primitive(PType::U8, Nullability::NonNullable),
+            )
+            .bind(&dtype)?
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn canonical_value_mask_maps_nullable_codes_directly() -> VortexResult<()> {
+        let values = BoolArray::from_iter([true, false, true]).into_array();
+        let codes =
+            PrimitiveArray::from_option_iter([Some(2u8), Some(0), Some(1), None]).into_array();
+        let mut ctx = array_session().create_execution_ctx();
+
+        let mask = super::take_value_mask(&values, &codes, &mut ctx)?;
+        assert_eq!(
+            mask,
+            vortex_mask::Mask::from_iter([true, true, false, false])
+        );
+        Ok(())
     }
 }
