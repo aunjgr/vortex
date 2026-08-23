@@ -6,14 +6,18 @@
 use vortex_error::VortexExpect;
 use vortex_error::VortexResult;
 
+use crate::AnyCanonical;
 use crate::ArrayView;
 use crate::Canonical;
 use crate::CanonicalView;
 use crate::ExecutionCtx;
+use crate::IntoArray;
 use crate::arrays::Bool;
 use crate::arrays::BoolArray;
+use crate::arrays::ConstantArray;
 use crate::arrays::Decimal;
 use crate::arrays::DecimalArray;
+use crate::arrays::Dict;
 use crate::arrays::Extension;
 use crate::arrays::ExtensionArray;
 use crate::arrays::FixedSizeList;
@@ -33,9 +37,42 @@ use crate::arrays::UnionArray;
 use crate::arrays::VarBinView;
 use crate::arrays::VarBinViewArray;
 use crate::arrays::VariantArray;
+use crate::arrays::dict::DictArraySlotsExt;
 use crate::arrays::dict::TakeExecute;
 use crate::arrays::dict::TakeReduce;
 use crate::arrays::variant::VariantArraySlotsExt;
+use crate::scalar::Scalar;
+
+/// Decodes a dictionary directly into its canonical logical array.
+///
+/// The dictionary root is already known, so this executes only encoded codes and values before
+/// invoking the typed canonical take kernel. It avoids rediscovering the dictionary rewrite
+/// through the general array executor at an engine materialization boundary.
+pub fn decode_dictionary(
+    array: ArrayView<'_, Dict>,
+    ctx: &mut ExecutionCtx,
+) -> VortexResult<Canonical> {
+    if array.is_empty() {
+        let dtype = array
+            .dtype()
+            .union_nullability(array.codes().dtype().nullability());
+        return Ok(Canonical::empty(&dtype));
+    }
+
+    let codes = array.codes().clone().execute::<PrimitiveArray>(ctx)?;
+    if codes.validity()?.definitely_all_null() {
+        return ConstantArray::new(Scalar::null(array.dtype().as_nullable()), codes.len())
+            .into_array()
+            .execute::<Canonical>(ctx);
+    }
+
+    let values = array
+        .values()
+        .clone()
+        .execute::<Canonical>(ctx)?
+        .into_array();
+    take_canonical(values.as_::<AnyCanonical>(), codes.as_view(), ctx)
+}
 
 /// Take from a canonical array using indices (codes), returning a new canonical array.
 ///
@@ -195,4 +232,37 @@ fn take_extension(
         .vortex_expect("take extension should not return None")
         .as_::<Extension>()
         .into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use vortex_buffer::buffer;
+    use vortex_error::VortexResult;
+
+    use crate::IntoArray;
+    use crate::VortexSessionExecute;
+    use crate::array_session;
+    use crate::arrays::Dict;
+    use crate::arrays::DictArray;
+    use crate::arrays::PrimitiveArray;
+    use crate::arrays::dict::decode_dictionary;
+    use crate::assert_arrays_eq;
+
+    #[test]
+    fn decode_dictionary_skips_the_generic_root_executor() -> VortexResult<()> {
+        let dictionary = DictArray::try_new(
+            buffer![0u8, 1, 0, 2].into_array(),
+            buffer![10i32, 20, 30].into_array(),
+        )?
+        .into_array();
+        let mut ctx = array_session().create_execution_ctx();
+        let decoded = decode_dictionary(dictionary.as_::<Dict>(), &mut ctx)?.into_array();
+
+        assert_arrays_eq!(
+            decoded,
+            PrimitiveArray::from_iter([10i32, 20, 10, 30]),
+            &mut ctx
+        );
+        Ok(())
+    }
 }
